@@ -32,15 +32,11 @@ emotion_voices = {
     'curious': {'rate': DEFAULT_VOICE_RATE + 10, 'volume': DEFAULT_VOICE_VOLUME},
 }
 
-# Maximum length of each speech chunk to ensure smooth TTS
-MAX_CHUNK_LENGTH = 150
-
 class SpeakManager:
     def __init__(self):
         self._init_engine()
         self.queue = queue.Queue()
         self.lock = threading.Lock()
-        self.speech_count = 0
         self.speaking_event = threading.Event()
         self.thread = threading.Thread(target=self._worker, daemon=True)
         self.thread.start()
@@ -58,28 +54,6 @@ class SpeakManager:
             print(f"Failed to init TTS engine: {e}")
             self._create_dummy_engine()
 
-    def set_voice_by_mood(self, mood=None):
-        if not mood:
-            mood = pan_emotions.get_mood()
-        settings = emotion_voices.get(mood, emotion_voices['neutral'])
-        self.engine.setProperty('rate', settings['rate'])
-        self.engine.setProperty('volume', settings['volume'])
-
-    def _chunk_text(self, text):
-        import re
-        sentences = re.split(r'(?<=[.!?]) +', text)
-        chunks = []
-        current = ""
-        for sentence in sentences:
-            if len(current) + len(sentence) <= MAX_CHUNK_LENGTH:
-                current += (sentence + " ")
-            else:
-                chunks.append(current.strip())
-                current = sentence + " "
-        if current:
-            chunks.append(current.strip())
-        return chunks
-
     def _create_dummy_engine(self):
         class DummyEngine:
             def say(self, text): print(f"[TTS FALLBACK] Speaking: {text}")
@@ -90,47 +64,68 @@ class SpeakManager:
         self.engine = DummyEngine()
         print("[SpeakManager] Using fallback dummy TTS engine")
 
-    def _speak_chunk(self, chunk, mood):
-        try:
-            self.set_voice_by_mood(mood)
-            self.engine.say(chunk)
-            self.engine.runAndWait()
-        except Exception as e:
-            print(f"TTS error in chunk: {e}")
-            traceback.print_exc()
+    def set_voice_by_mood(self, mood=None):
+        if not mood:
+            mood = pan_emotions.get_mood()
+        settings = emotion_voices.get(mood, emotion_voices['neutral'])
+        self.engine.setProperty('rate', settings['rate'])
+        self.engine.setProperty('volume', settings['volume'])
+
+    def speak(self, text, mood_override=None):
+        self.queue.put((text, mood_override or pan_emotions.get_mood()))
 
     def _worker(self):
         while True:
             text, mood = self.queue.get()
             try:
-                with self.lock:
-                    self.engine.stop()
-                    self._init_engine()
-
-                    print("[SpeakManager] Speaking started")
-                    self.speaking_event.set()
-                    chunks = self._chunk_text(text)
-                    for chunk in chunks:
-                        self._speak_chunk(chunk, mood)
-                        time.sleep(0.05)
-
-                    self.speech_count += 1
-                    print("[SpeakManager] Speaking ended")
+                self._speak_with_recovery(text, mood)
             except Exception:
-                print("TTS error occurred in worker:")
+                print("[TTS ERROR] Fatal Error in TTS Worker.")
                 traceback.print_exc()
+                self._init_engine()  # Re-initialize on failure
             finally:
-                self.speaking_event.clear()
-            self.queue.task_done()
+                self.queue.task_done()
 
-    def speak(self, text, mood_override=None):
-        self.queue.put((text, mood_override))
+    def _speak_with_recovery(self, text, mood):
+        with self.lock:
+            self.engine.stop()
+            self._init_engine()
+            self.engine.setProperty('rate', emotion_voices.get(mood, emotion_voices['neutral'])['rate'])
+            self.engine.setProperty('volume', emotion_voices.get(mood, emotion_voices['neutral'])['volume'])
+
+            print("[SpeakManager] Speaking started")
+            chunks = self._chunk_text(text)
+            for chunk in chunks:
+                self.engine.say(chunk)
+                self.engine.runAndWait()
+
+            print("[SpeakManager] Speaking ended")
+
+    def _chunk_text(self, text):
+        import re
+        sentences = re.split(r'(?<=[.!?]) +', text)
+        chunks = []
+        current = ""
+        for sentence in sentences:
+            if len(current) + len(sentence) <= 150:  # MAX_CHUNK_LENGTH
+                current += (sentence + " ")
+            else:
+                chunks.append(current.strip())
+                current = sentence + " "
+        if current:
+            chunks.append(current.strip())
+        return chunks
 
 # Global instance of SpeakManager to be used throughout the application
 speak_manager = SpeakManager()
 
 def speak(text, mood_override=None):
-    speak_manager.speak(text, mood_override)
+    try:
+        speak_manager.speak(text, mood_override)
+    except Exception as e:
+        print(f"[TTS ERROR] Reinitializing TTS due to error: {e}")
+        speak_manager._init_engine()
+        speak_manager.speak(text, mood_override)
 
 def listen_to_user(timeout=5, phrase_time_limit=10):
     recognizer = sr.Recognizer()

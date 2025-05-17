@@ -20,13 +20,17 @@ class PanAI:
         """
         Initialize the language model and tokenizer.
         
-        Loads the pre-trained model and tokenizer, and sets up the appropriate
-        device (GPU if available, otherwise CPU) for inference.
+        Dynamically selects GPU (CUDA) with BitsAndBytes if available, 
+        otherwise falls back to CPU (standard precision).
         """
-        self.model_name = "gpt2"  # You can change this to any compatible model
-        self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
-        self.model = AutoModelForCausalLM.from_pretrained(self.model_name)
+        self.model_name = "EleutherAI/gpt-neo-1.3B"  # Smaller, faster model
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+        self.model = AutoModelForCausalLM.from_pretrained(
+            self.model_name,
+            torch_dtype=torch.float16 if self.device.type == "cuda" else torch.float32
+        )
         self.model.to(self.device)
         self.model.eval()  # Set the model to evaluation mode
 
@@ -34,14 +38,9 @@ class PanAI:
         """
         Generate a text response based on the given prompt.
         
-        Uses the loaded language model to generate a continuation of the
-        provided prompt text. Various parameters control the generation process
-        to ensure quality and relevance.
-        
         Args:
             prompt (str): The input text to generate a response from
             max_length (int, optional): Maximum length of the generated response
-                                        in tokens. Defaults to 100.
             
         Returns:
             str: The generated text response
@@ -51,8 +50,9 @@ class PanAI:
             **inputs, 
             max_length=max_length, 
             num_return_sequences=1,
-            no_repeat_ngram_size=2,  # Prevent repetition of n-grams
-            temperature=0.7  # Control randomness (lower is more deterministic)
+            do_sample=True,          # Allow sampling (needed for temperature)
+            temperature=0.7,         # Control randomness (lower is more deterministic)
+            no_repeat_ngram_size=2   # Prevent repetition of n-grams
         )
         response = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
         return response

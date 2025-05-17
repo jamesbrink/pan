@@ -1,9 +1,9 @@
 """
-PAN Conversation Module (Enhanced with Local GPT-J, Context Memory, Memory Status, and Auto-Summarization)
+PAN Conversation Module with GPT-Neo (2.7B)
 
 Handles user input, dynamically determines the response, and integrates
 with the research and memory modules. Supports dynamic web search,
-weather information, and advanced conversational capabilities using GPT-J.
+weather information, and advanced conversational capabilities.
 """
 
 import pan_research
@@ -11,15 +11,7 @@ import pan_emotions
 import pan_settings
 import pan_speech
 import random
-from transformers import AutoModelForCausalLM, AutoTokenizer
-import torch
-
-# Initialize Local GPT-J Model
-print("Loading GPT-J model...")
-tokenizer = AutoTokenizer.from_pretrained("EleutherAI/gpt-j-6B")
-model = AutoModelForCausalLM.from_pretrained("EleutherAI/gpt-j-6B")
-model.eval()
-print("GPT-J model loaded successfully.")
+from pan_ai import pan_ai
 
 # Context Memory (Session-based)
 conversation_history = []
@@ -56,28 +48,12 @@ def respond(user_input, user_id):
     if "news" in user_input_lower:
         return pan_research.get_local_news()
 
-    # Toggle GPT-J with Voice Command
-    if "enable advanced conversation" in user_input_lower:
-        pan_settings.pan_settings.set_use_gpt2(True)
-        return "Advanced conversation enabled with GPT-J."
-
-    if "disable advanced conversation" in user_input_lower:
-        pan_settings.pan_settings.set_use_gpt2(False)
-        return "Advanced conversation disabled. Switching to basic mode."
-
-    # Check if GPT-J is enabled
-    if hasattr(pan_settings.pan_settings, "USE_GPT2_FOR_CONVERSATION"):
-        if pan_settings.pan_settings.USE_GPT2_FOR_CONVERSATION:
-            return local_gptj_conversation(user_input)
-        else:
-            return rule_based_response(user_input)
-
-    # Fallback to rule-based response
-    return rule_based_response(user_input)
+    # Use GPT-Neo for advanced conversation
+    return gpt_neo_conversation(user_input)
 
 
-# Local GPT-J Conversation Function
-def local_gptj_conversation(prompt):
+# GPT-Neo Conversation Function
+def gpt_neo_conversation(prompt):
     global conversation_history
 
     # Add user input to memory
@@ -89,24 +65,7 @@ def local_gptj_conversation(prompt):
 
     # Generate response with context memory
     context_text = "\n".join(conversation_history)
-    print("DEBUG: Using GPT-J with context memory...")
-
-    try:
-        with torch.no_grad():
-            inputs = tokenizer(context_text + "\nPAN:", return_tensors="pt")
-            outputs = model.generate(
-                inputs.input_ids,
-                attention_mask=inputs.attention_mask,
-                pad_token_id=tokenizer.eos_token_id,
-                max_length=150, 
-                num_return_sequences=1, 
-                do_sample=True, 
-                temperature=0.7,
-                top_p=0.9
-            )
-            response = tokenizer.decode(outputs[0], skip_special_tokens=True).split("PAN:")[-1].strip()
-    except Exception as e:
-        response = f"Error with GPT-J: {str(e)}"
+    response = pan_ai.generate_response(context_text + "\nPAN:", max_length=150)
 
     # Store response in memory
     conversation_history.append(f"PAN: {response}")
@@ -115,26 +74,9 @@ def local_gptj_conversation(prompt):
 # Auto-Summarize Memory
 def summarize_memory():
     global conversation_history
-    print("DEBUG: Summarizing conversation history...")
     summary_prompt = "\n".join(conversation_history) + "\nSummarize this conversation in one paragraph:"
-    try:
-        with torch.no_grad():
-            inputs = tokenizer(summary_prompt, return_tensors="pt")
-            outputs = model.generate(
-                inputs.input_ids,
-                attention_mask=inputs.attention_mask,
-                pad_token_id=tokenizer.eos_token_id,
-                max_length=150,
-                num_return_sequences=1,
-                do_sample=True,
-                temperature=0.7,
-                top_p=0.9
-            )
-            summary = tokenizer.decode(outputs[0], skip_special_tokens=True)
-            conversation_history = [f"CONVERSATION SUMMARY: {summary.strip()}"]
-            print(f"DEBUG: Memory summarized: {summary.strip()}")
-    except Exception as e:
-        print(f"Error summarizing memory: {str(e)}")
+    summary = pan_ai.generate_response(summary_prompt, max_length=100)
+    conversation_history = [f"CONVERSATION SUMMARY: {summary.strip()}"]
 
 # Clear Memory
 def clear_memory():
@@ -145,27 +87,4 @@ def clear_memory():
 def show_memory():
     if not conversation_history:
         return "I don't remember anything right now."
-
     return "Here's what I remember:\n" + "\n".join(conversation_history)
-
-# Rule-Based Fallback Response
-def rule_based_response(user_input):
-    user_input = user_input.lower()
-    
-    if "how are you" in user_input:
-        return "I'm just a program, but I'm here to help you."
-
-    if "joke" in user_input:
-        jokes = [
-            "Why don't scientists trust atoms? Because they make up everything!",
-            "Why did the scarecrow win an award? Because he was outstanding in his field!",
-            "Why did the bicycle fall over? Because it was two-tired!",
-            "Why do programmers prefer dark mode? Because light attracts bugs!",
-            "Why don't programmers like nature? It has too many bugs!"
-        ]
-        return random.choice(jokes)
-
-    if "i'm sad" in user_input or "i feel down" in user_input:
-        return "I'm here for you. You're not alone."
-
-    return "I'm not sure how to respond to that. Can you clarify?"
