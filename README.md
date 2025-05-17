@@ -99,7 +99,7 @@ PAN requires the following API keys to access external services:
 1. **Weather API Key** (OpenWeatherMap)
    - Sign up at [OpenWeatherMap](https://openweathermap.org/api)
    - Create a free API key
-   - Add to your `.env` file as `WEATHER_API_KEY=your_key_here`
+   - Add to your `.env` file as `OPENWEATHERMAP_API_KEY=your_key_here`
 
 2. **News API Key** (NewsAPI)
    - Sign up at [NewsAPI](https://newsapi.org/)
@@ -112,7 +112,7 @@ Example `.env` file:
 DATABASE_PATH=pan_memory.db
 
 # API keys
-WEATHER_API_KEY=abc123yourapikeyhere
+OPENWEATHERMAP_API_KEY=abc123yourapikeyhere
 NEWS_API_KEY=xyz789yourapikeyhere
 
 # Location settings

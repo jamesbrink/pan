@@ -40,6 +40,7 @@
           numpy
           sqlalchemy
           python-dateutil
+          beautifulsoup4
         ]);
       in
       {

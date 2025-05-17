@@ -1,18 +1,17 @@
 """
-Speech Interface Module for PAN
+Speech Interface Module for PAN (Cross-Platform)
 
 This module provides text-to-speech and speech recognition capabilities for PAN.
-It adjusts speech parameters based on emotional state, handles chunking of long
-utterances, and provides robust speech recognition with error handling.
+It supports both Windows (SAPI) and Linux (espeak) for TTS, and provides robust 
+speech recognition with Google Speech API.
 """
 
+import pyttsx3
 import queue
 import threading
 import time
 import traceback
 import warnings
-
-import pyttsx3
 
 # Suppress deprecation warnings for speech_recognition library dependencies
 with warnings.catch_warnings():
@@ -29,6 +28,13 @@ from pan_config import (
     USE_DYNAMIC_ENERGY_THRESHOLD,
 )
 from pan_emotions import pan_emotions
+
+import platform
+
+# Detect OS
+is_windows = platform.system().lower() == "windows"
+is_linux = platform.system().lower() == "linux"
+is_macos = platform.system().lower() == "darwin"
 
 # Try to import Windows SAPI for better speech synthesis on Windows
 try:
@@ -55,18 +61,6 @@ MAX_CHUNK_LENGTH = 150
 
 
 class SpeakManager:
-    """
-    Manages text-to-speech operations with emotion-based voice modulation.
-
-    This class handles background text-to-speech processing in a separate thread,
-    manages chunking of long responses, and applies appropriate voice parameters
-    based on PAN's current emotional state. It also handles fallback between
-    Windows SAPI (if available) and cross-platform pyttsx3.
-
-    If all TTS engines fail, the class creates a dummy engine that prints text
-    to the console as a fallback mechanism.
-    """
-
     def __init__(self):
         """
         Initialize the SpeakManager with necessary components for TTS.
@@ -91,12 +85,9 @@ class SpeakManager:
     def _init_engine(self):
         """Initialize the pyttsx3 TTS engine with platform-specific optimizations."""
         print("[SpeakManager] Initializing pyttsx3 engine")
-        import platform
-        
-        system = platform.system()
         
         try:
-            if system == 'Darwin':
+            if is_macos:
                 # On macOS, use the default NSS driver and increase rate
                 self.engine = pyttsx3.init()
                 # Get available voices and try to find a high-quality voice
@@ -107,31 +98,21 @@ class SpeakManager:
                         self.engine.setProperty('voice', voice.id)
                         print(f"[SpeakManager] Using enhanced macOS voice: {voice.name}")
                         break
-            elif system == 'Linux':
-                # Try to use espeak driver explicitly on Linux
-                self.engine = pyttsx3.init(driverName="espeak")
+            elif is_windows:
+                self.engine = pyttsx3.init(driverName='sapi5')
+                if has_sapi:
+                    self.sapi_engine = win32com.client.Dispatch("SAPI.SpVoice")
+                else:
+                    self.sapi_engine = None
+            elif is_linux:
+                self.engine = pyttsx3.init(driverName='espeak')
             else:
-                # Fall back to default initialization for Windows and others
-                self.engine = pyttsx3.init()
-                
-        except (ImportError, RuntimeError, ValueError) as engine_error:
-            print(f"Failed to init with platform-specific driver: {engine_error}")
-            try:
-                # Fall back to default initialization
-                self.engine = pyttsx3.init()
-            except (ImportError, RuntimeError, ValueError) as init_error:
-                print(f"Failed to init TTS engine: {init_error}")
-                # Create dummy engine if all else fails
-                self._create_dummy_engine()
+                self.engine = pyttsx3.init()  # Default cross-platform
+        except (ImportError, RuntimeError, ValueError) as e:
+            print(f"Failed to init TTS engine: {e}")
+            self._create_dummy_engine()
 
     def set_voice_by_mood(self, mood=None):
-        """
-        Set voice parameters based on the current emotional state.
-
-        Args:
-            mood (str, optional): The mood to set the voice for. If None,
-                                  uses PAN's current mood.
-        """
         if not mood:
             mood = pan_emotions.get_mood()
         settings = emotion_voices.get(mood, emotion_voices["neutral"])
@@ -150,13 +131,10 @@ class SpeakManager:
             list: A list of text chunks optimized for the current platform
         """
         import re
-        import platform
-        
-        system = platform.system()
         
         # Use platform-specific chunk sizes
         # macOS NSSpeechSynthesizer performs better with larger chunks
-        chunk_size = 300 if system == 'Darwin' else MAX_CHUNK_LENGTH
+        chunk_size = 300 if is_macos else MAX_CHUNK_LENGTH
         
         # Split on sentence boundaries
         sentences = re.split(r"(?<=[.!?]) +", text)
@@ -197,26 +175,11 @@ class SpeakManager:
         return chunks
 
     def _create_dummy_engine(self):
-        """Create a dummy engine that just prints text when TTS fails."""
-
         class DummyEngine:
-            """Dummy TTS engine that prints text instead of speaking."""
-
-            def say(self, text):
-                """Print text instead of speaking it."""
-                print(f"[TTS FALLBACK] Speaking: {text}")
-
-            def runAndWait(self):
-                """Dummy implementation of runAndWait."""
-                return
-
-            def stop(self):
-                """Dummy implementation of stop."""
-                return
-
-            def setProperty(self, _, __):
-                """Dummy implementation of setProperty."""
-                return
+            def say(self, text): print(f"[TTS FALLBACK] Speaking: {text}")
+            def runAndWait(self): pass
+            def stop(self): pass
+            def setProperty(self, prop, value): pass
 
         self.engine = DummyEngine()
         print("[SpeakManager] Using fallback dummy TTS engine")
@@ -231,9 +194,6 @@ class SpeakManager:
             chunk (str): The text chunk to speak
             mood (str): The emotional mood to apply to the voice
         """
-        import platform
-        system = platform.system()
-        
         # Use Windows SAPI if available
         if self.sapi_engine:
             try:
@@ -244,7 +204,7 @@ class SpeakManager:
                 print(f"SAPI TTS failed: {sapi_error}")
         
         # macOS-specific optimizations
-        if system == 'Darwin':
+        if is_macos:
             try:
                 # We already set the voice parameters in the worker, no need to call set_voice_by_mood each time
                 # This avoids the overhead of changing properties for each chunk
@@ -287,10 +247,6 @@ class SpeakManager:
                     # Set voice parameters once before speaking
                     self.set_voice_by_mood(mood)
                     
-                    # Detect platform to optimize for macOS
-                    import platform
-                    is_macos = platform.system() == 'Darwin'
-                    
                     chunks = self._chunk_text(text)
                     for chunk in chunks:
                         self._speak_chunk(chunk, mood)
@@ -308,13 +264,6 @@ class SpeakManager:
             self.queue.task_done()
 
     def speak(self, text, mood_override=None):
-        """
-        Add text to the speech queue to be spoken with the given mood.
-
-        Args:
-            text (str): The text to speak
-            mood_override (str, optional): Override the current mood with this one
-        """
         self.queue.put((text, mood_override))
 
 

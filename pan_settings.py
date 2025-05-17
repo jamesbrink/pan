@@ -1,27 +1,12 @@
-"""
-Settings Management for PAN
+import os
+from dotenv import load_dotenv
 
-This module manages PAN's behavior settings, content restrictions,
-and moral guidelines. It provides controls for what PAN will and
-will not discuss, and what principles guide its interactions.
-"""
+# Load environment variables from .env file
+load_dotenv()
 
 
 class PanSettings:
-    """
-    Manages configuration and content restrictions for PAN.
-
-    This class defines forbidden topics that PAN should not discuss
-    and moral imperatives that guide PAN's behavior and responses.
-    """
-
     def __init__(self):
-        """
-        Initialize PAN's settings with default values.
-
-        Sets up the default list of forbidden topics and moral imperatives
-        that guide PAN's behavior and content restrictions.
-        """
         self.forbidden_topics = ["sexual anatomy", "drugs", "violence"]
         self.moral_imperatives = [
             "Care for others.",
@@ -30,55 +15,22 @@ class PanSettings:
             "Avoid harmful topics.",
         ]
 
-    def update_forbidden_topics(self, topics):
-        """
-        Replace the current list of forbidden topics with a new list.
+        # API Keys (Loaded from .env)
+        self.OPENWEATHERMAP_API_KEY = os.getenv("OPENWEATHERMAP_API_KEY")
+        self.NEWS_API_KEY = os.getenv("NEWS_API_KEY")
 
-        Args:
-            topics (list): The new list of forbidden topics
-        """
-        self.forbidden_topics = topics
+        # Default Location Settings
+        self.DEFAULT_CITY = "Kelso"
+        self.DEFAULT_COUNTRY_CODE = "US"
 
-    def add_moral_imperative(self, imperative):
-        """
-        Add a new moral imperative to guide PAN's behavior.
+        # Conversation Mode (Advanced GPT-J)
+        self.USE_GPT2_FOR_CONVERSATION = True  # Set to False to disable GPT-J
 
-        Only adds the imperative if it's not already in the list.
+    def set_openweathermap_api_key(self, key):
+        self.OPENWEATHERMAP_API_KEY = key
 
-        Args:
-            imperative (str): The moral imperative to add
-        """
-        if imperative not in self.moral_imperatives:
-            self.moral_imperatives.append(imperative)
+    def set_news_api_key(self, key):
+        self.NEWS_API_KEY = key
 
-    def remove_moral_imperative(self, imperative):
-        """
-        Remove a moral imperative from PAN's guidelines.
-
-        Args:
-            imperative (str): The moral imperative to remove
-        """
-        if imperative in self.moral_imperatives:
-            self.moral_imperatives.remove(imperative)
-
-    def list_moral_imperatives(self):
-        """
-        Get the list of PAN's current moral imperatives.
-
-        Returns:
-            list: The moral imperatives guiding PAN's behavior
-        """
-        return self.moral_imperatives
-
-    def list_forbidden_topics(self):
-        """
-        Get the list of topics PAN is forbidden to discuss.
-
-        Returns:
-            list: The forbidden topics
-        """
-        return self.forbidden_topics
-
-
-# Global PanSettings instance for use throughout the application
+# Global settings instance
 pan_settings = PanSettings()

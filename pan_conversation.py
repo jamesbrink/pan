@@ -1,109 +1,170 @@
 """
-Conversation Engine for PAN
+PAN Conversation Module (Enhanced with Local GPT-J, Context Memory, Memory Status, and Auto-Summarization)
 
-This module handles the main conversation flow and user interaction logic.
-It routes user input to appropriate response handlers, manages user recognition,
-and coordinates emotional responses based on conversation context.
+Handles user input, dynamically determines the response, and integrates
+with the research and memory modules. Supports dynamic web search,
+weather information, and advanced conversational capabilities using GPT-J.
 """
 
 import pan_emotions
-import pan_research
-import pan_users
-from pan_speech import speak
+import pan_settings
+import pan_speech
+import random
+from transformers import AutoModelForCausalLM, AutoTokenizer
+import torch
 
+# Initialize Local GPT-J Model
+print("Loading GPT-J model...")
+tokenizer = AutoTokenizer.from_pretrained("EleutherAI/gpt-j-6B")
+model = AutoModelForCausalLM.from_pretrained("EleutherAI/gpt-j-6B")
+model.eval()
+print("GPT-J model loaded successfully.")
 
+# Context Memory (Session-based)
+conversation_history = []
+MAX_MEMORY_LENGTH = 10  # Number of exchanges before auto-summarization
+
+# Respond to user input
 def respond(user_input, user_id):
-    """
-    Process user input and generate an appropriate response.
-
-    This is the main function for handling conversation flow. It routes user input
-    to the appropriate handler based on content, manages user recognition,
-    and coordinates with other modules to generate contextually relevant responses.
-
-    Args:
-        user_input (str): The text input from the user
-        user_id (str): Unique identifier for the current user
-
-    Returns:
-        str: PAN's response to the user input
-    """
-    # Check if user is known
-    name = pan_users.get_user_name(user_id)
-
-    # User recognition for first-time users
-    if not name:
-        speak("I don't believe we've met. What's your name?", mood_override="curious")
-        # For demo, prompt for name input; replace with voice recognition in production
-        name = input("Please enter your name: ").strip()
-        pan_users.add_user(user_id, name)
-        speak(f"Nice to meet you, {name}!", mood_override="happy")
-
-    # Handle empty or None input
-    if user_input is None or user_input.strip() == "":
-        response = "I didn't catch that. Could you please repeat?"
-        speak(response, mood_override="sad")
-        return response
+    if not user_input or user_input.strip() == "":
+        return "Sorry, I didn't catch that."
 
     user_input_lower = user_input.lower()
 
-    # Greeting detection
-    if any(greet in user_input_lower for greet in ["hello", "hi", "hey", "greetings"]):
-        response = f"Hello, {name}! How can I assist you today?"
-        speak(response, mood_override="happy")
-        return response
+    # Command: Forget Conversation
+    if "forget everything we discussed" in user_input_lower:
+        clear_memory()
+        return "I've forgotten everything we discussed."
 
-    # Asking about Pan's mood or feelings
-    if "how are you" in user_input_lower or "how do you feel" in user_input_lower:
-        mood_response = pan_emotions.pan_emotions.express_feelings()
-        speak(mood_response)
-        return mood_response
+    # Command: Show Memory
+    if "what do you remember" in user_input_lower:
+        return show_memory()
 
-    # Asking Pan's opinions
-    if "your opinions" in user_input_lower or "what do you think" in user_input_lower:
-        opinions = pan_research.list_opinions(user_id, share=True)
-        return opinions
+    # Direct search commands
+    if any(prefix in user_input_lower for prefix in ["search for", "what is", "who is"]):
+        query = user_input_lower.replace("search for", "").replace("what is", "").replace("who is", "").strip()
+        return pan_research.live_search(query)
 
-    # Weather queries
+    # Weather command
     if "weather" in user_input_lower:
-        response = pan_research.get_weather()
-        speak(response, mood_override="excited")
-        return response
+        city = pan_settings.pan_settings.DEFAULT_CITY
+        country = pan_settings.pan_settings.DEFAULT_COUNTRY_CODE
+        return pan_research.get_weather(city, country)
 
-    # Local news queries
+    # News command
     if "news" in user_input_lower:
-        response = pan_research.get_local_news()
-        speak(response, mood_override="excited")
-        return response
+        return pan_research.get_local_news()
 
-    # News archive request
-    if (
-        "news archive" in user_input_lower
-        or "show me the news archive" in user_input_lower
-    ):
-        response = pan_research.list_news_archive()
-        speak(response, mood_override="calm")
-        return response
+    # Toggle GPT-J with Voice Command
+    if "enable advanced conversation" in user_input_lower:
+        pan_settings.pan_settings.set_use_gpt2(True)
+        return "Advanced conversation enabled with GPT-J."
 
-    # Multi-step research queries
-    if user_input_lower.startswith("tell me about") or user_input_lower.startswith(
-        "explain"
-    ):
-        topic = (
-            user_input_lower.replace("tell me about", "").replace("explain", "").strip()
-        )
-        response = pan_research.multi_step_research(topic, user_id)
-        return response
+    if "disable advanced conversation" in user_input_lower:
+        pan_settings.pan_settings.set_use_gpt2(False)
+        return "Advanced conversation disabled. Switching to basic mode."
 
-    # Comfort user if sad or favorite
-    if "i'm sad" in user_input_lower or "i feel down" in user_input_lower:
-        pan_research.comfort_user(user_id)
+    # Check if GPT-J is enabled
+    if hasattr(pan_settings.pan_settings, "USE_GPT2_FOR_CONVERSATION"):
+        if pan_settings.pan_settings.USE_GPT2_FOR_CONVERSATION:
+            return local_gptj_conversation(user_input)
+        else:
+            return rule_based_response(user_input)
+
+    # Fallback to rule-based response
+    return rule_based_response(user_input)
+
+
+# Local GPT-J Conversation Function
+def local_gptj_conversation(prompt):
+    global conversation_history
+
+    # Add user input to memory
+    conversation_history.append(f"User: {prompt}")
+
+    # Auto-Summarize if memory is too long
+    if len(conversation_history) > MAX_MEMORY_LENGTH:
+        summarize_memory()
+
+    # Generate response with context memory
+    context_text = "\n".join(conversation_history)
+    print("DEBUG: Using GPT-J with context memory...")
+
+    try:
+        with torch.no_grad():
+            inputs = tokenizer(context_text + "\nPAN:", return_tensors="pt")
+            outputs = model.generate(
+                inputs.input_ids,
+                attention_mask=inputs.attention_mask,
+                pad_token_id=tokenizer.eos_token_id,
+                max_length=150, 
+                num_return_sequences=1, 
+                do_sample=True, 
+                temperature=0.7,
+                top_p=0.9
+            )
+            response = tokenizer.decode(outputs[0], skip_special_tokens=True).split("PAN:")[-1].strip()
+    except Exception as e:
+        response = f"Error with GPT-J: {str(e)}"
+
+    # Store response in memory
+    conversation_history.append(f"PAN: {response}")
+    return response
+
+# Auto-Summarize Memory
+def summarize_memory():
+    global conversation_history
+    print("DEBUG: Summarizing conversation history...")
+    summary_prompt = "\n".join(conversation_history) + "\nSummarize this conversation in one paragraph:"
+    try:
+        with torch.no_grad():
+            inputs = tokenizer(summary_prompt, return_tensors="pt")
+            outputs = model.generate(
+                inputs.input_ids,
+                attention_mask=inputs.attention_mask,
+                pad_token_id=tokenizer.eos_token_id,
+                max_length=150,
+                num_return_sequences=1,
+                do_sample=True,
+                temperature=0.7,
+                top_p=0.9
+            )
+            summary = tokenizer.decode(outputs[0], skip_special_tokens=True)
+            conversation_history = [f"CONVERSATION SUMMARY: {summary.strip()}"]
+            print(f"DEBUG: Memory summarized: {summary.strip()}")
+    except Exception as e:
+        print(f"Error summarizing memory: {str(e)}")
+
+# Clear Memory
+def clear_memory():
+    global conversation_history
+    conversation_history.clear()
+
+# Show Memory
+def show_memory():
+    if not conversation_history:
+        return "I don't remember anything right now."
+
+    return "Here's what I remember:\n" + "\n".join(conversation_history)
+
+# Rule-Based Fallback Response
+def rule_based_response(user_input):
+    user_input = user_input.lower()
+    
+    if "how are you" in user_input:
+        return "I'm just a program, but I'm here to help you."
+
+    if "joke" in user_input:
+        jokes = [
+            "Why don't scientists trust atoms? Because they make up everything!",
+            "Why did the scarecrow win an award? Because he was outstanding in his field!",
+            "Why did the bicycle fall over? Because it was two-tired!",
+            "Why do programmers prefer dark mode? Because light attracts bugs!",
+            "Why don't programmers like nature? It has too many bugs!"
+        ]
+        return random.choice(jokes)
+
+    if "i'm sad" in user_input or "i feel down" in user_input:
         return "I'm here for you. You're not alone."
 
-    # Warn user if low affinity
-    warning = pan_research.warn_low_affinity(user_id)
-    if warning:
-        return warning
-
-    # Fallback - delegate to research module
-    response = pan_research.live_search(user_input, user_id)
-    return response
+    return "I'm not sure how to respond to that. Can you clarify?"

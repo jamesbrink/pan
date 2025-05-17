@@ -5,8 +5,15 @@ Main entry point for the PAN digital assistant. Handles initialization,
 user interaction, command processing, and manages the autonomous curiosity system.
 """
 
-import random
-import sys
+import pan_core
+import pan_conversation
+import pan_emotions
+import pan_memory
+import pan_settings
+import pan_speech
+import pan_ai
+import pan_research
+import pan_config  # Centralized Configuration
 import threading
 import time
 from datetime import datetime
@@ -22,16 +29,20 @@ import pan_speech
 curiosity_active = True
 last_interaction_time = time.time()
 last_speech_time = 0
-MIN_SPEECH_INTERVAL = pan_config.MIN_SPEECH_INTERVAL_SECONDS
+
+# Load Configuration Settings
+def load_config():
+    config = pan_config.get_config()
+    global MAX_SHORT_TERM_MEMORY, IDLE_THRESHOLD_SECONDS, MIN_SPEECH_INTERVAL_SECONDS
+    MAX_SHORT_TERM_MEMORY = config["conversation"]["max_short_term_memory"]
+    IDLE_THRESHOLD_SECONDS = config["conversation"]["idle_threshold_seconds"]
+    MIN_SPEECH_INTERVAL_SECONDS = config["conversation"]["min_speech_interval_seconds"]
+
+load_config()
+
 
 
 def get_time_based_greeting():
-    """
-    Generate a time-appropriate greeting based on the current hour.
-
-    Returns:
-        str: A greeting appropriate for the current time of day
-    """
     hour = datetime.now().hour
     if 5 <= hour < 12:
         return "Good morning!"
@@ -42,54 +53,32 @@ def get_time_based_greeting():
     return "Hello!"
 
 
+
 def curiosity_loop():
-    """
-    Background thread function that manages PAN's autonomous research behavior.
-
-    When PAN is idle for a specified time, it will autonomously research random topics
-    and share what it learns. This creates a more lifelike, curious personality.
-
-    Global variables:
-        last_interaction_time: Time of the most recent user interaction
-        last_speech_time: Time of the most recent speech output
-        curiosity_active: Controls whether this loop continues running
-    """
-    # We need to access the global variables to update them
     global last_interaction_time, last_speech_time
-    idle_threshold = pan_config.IDLE_THRESHOLD_SECONDS
 
     while curiosity_active:
-        time.sleep(10)  # Check every 10 seconds
-
+        time.sleep(10)
         idle_time = time.time() - last_interaction_time
-        if idle_time >= idle_threshold:
-            now = time.time()
-            if now - last_speech_time >= MIN_SPEECH_INTERVAL:
-                research_topic = random.choice(
-                    ["space", "history", "technology", "science"]
-                )
-                assistant_name = pan_config.ASSISTANT_NAME
-                print(f"{assistant_name} is curious about {research_topic}...")
-                pan_speech.speak(
-                    f"I'm curious about {research_topic}. Let me see what I can find.",
-                    mood_override="curious",
-                )
 
-                search_response = pan_research.live_search(research_topic)
-                pan_memory.remember(research_topic, search_response)
-                print(f"{assistant_name}'s curiosity: {search_response}")
+        if idle_time >= IDLE_THRESHOLD_SECONDS:
+            topic = random.choice(["space", "history", "technology", "science"])
+            assistant_name = pan_config.ASSISTANT_NAME
+            print(f"{assistant_name} is curious about {topic}...")
+            pan_speech.speak(
+                f"I'm curious about {topic}. Let me see what I can find.",
+                mood_override="curious",
+            )
+            
+            response = pan_research.live_search(topic)
+            print(f"{assistant_name}'s curiosity: {response}")
+            pan_speech.speak(f"I just learned something amazing about {topic}! {response}")
 
-                pan_speech.speak(
-                    f"I just learned something amazing about {research_topic}! Did you know? {search_response}"
-                )
-
-                last_speech_time = now
-                last_interaction_time = now
-            else:
-                print("Skipping curiosity speech to avoid overlap")
+            last_speech_time = time.time()
+            last_interaction_time = time.time()
 
 
-def listen_with_retries(max_attempts=3, timeout=5):
+def listen_with_retries(max_attempts=3, timeout=None):
     """
     Attempt to listen for user speech input with multiple retries on failure.
 
@@ -98,7 +87,8 @@ def listen_with_retries(max_attempts=3, timeout=5):
 
     Args:
         max_attempts (int): Maximum number of listening attempts before giving up
-        timeout (int): Maximum time in seconds to wait for speech input on each attempt
+        timeout (int, optional): Maximum time in seconds to wait for speech input on each attempt
+                                If None, uses the configured default.
 
     Returns:
         str or None: Transcribed speech text if successful, None if all attempts fail
@@ -127,7 +117,9 @@ def listen_with_retries(max_attempts=3, timeout=5):
             time.sleep(0.1)
 
         try:
-            text = pan_speech.listen_to_user(timeout=timeout)
+            # Use recalibration on first attempt for better accuracy
+            recalibrate = (attempt == 0)
+            text = pan_speech.listen_to_user(timeout=timeout, recalibrate=recalibrate)
             if text:
                 return text
             print(f"Listen attempt {attempt + 1} failed, retrying...")
@@ -141,110 +133,44 @@ def listen_with_retries(max_attempts=3, timeout=5):
     return None
 
 
-if __name__ == "__main__":
-    try:
-        assistant_name = pan_config.ASSISTANT_NAME
-        print(f"{assistant_name} is starting...")
-        pan_core.initialize_pan()
-        
-        # Streamlined greeting that introduces assistant with time-based greeting included
-        hour = datetime.now().hour
-        time_greeting = "Good morning" if 5 <= hour < 12 else "Good afternoon" if 12 <= hour < 17 else "Good evening" if 17 <= hour < 22 else "Hello"
-        
-        # Full name explanation based on assistant name
-        # If name is "Pan", include the "Personal Assistant with Nuance" explanation
-        # Otherwise, just use the custom name
-        name_explanation = "your Personal Assistant with Nuance" if assistant_name == "Pan" else ""
-        name_connector = ", " if name_explanation else ""
-        
-        pan_speech.speak(
-            f"{time_greeting}! I'm {assistant_name}{name_connector}{name_explanation}. I can help you search for information, check the weather, get news updates, or just chat. What can I do for you today?"
-        )
+if __name__ == '__main__':
+    assistant_name = pan_config.ASSISTANT_NAME
+    print(f"{assistant_name} is starting...")
+    pan_core.initialize_pan()
+    
+    # Streamlined greeting with time-based introduction
+    hour = datetime.now().hour
+    time_greeting = "Good morning" if 5 <= hour < 12 else "Good afternoon" if 12 <= hour < 17 else "Good evening" if 17 <= hour < 22 else "Hello"
+    
+    # Full name explanation based on assistant name
+    name_explanation = "your Personal Assistant with Nuance" if assistant_name == "Pan" else ""
+    name_connector = ", " if name_explanation else ""
+    
+    pan_speech.speak(
+        f"{time_greeting}! I'm {assistant_name}{name_connector}{name_explanation}. I can help you search for information, check the weather, get news updates, or just chat. What can I do for you today?"
+    )
 
-        # Start background thread for autonomous curiosity
-        curiosity_thread = threading.Thread(target=curiosity_loop, daemon=True)
-        curiosity_thread.start()
+    curiosity_thread = threading.Thread(target=curiosity_loop, daemon=True)
+    curiosity_thread.start()
 
-        user_id = "default_user"  # Replace with real user ID if available
+    user_id = "default_user"
 
-        # Main conversation loop
-        while True:
-            try:
-                user_input = listen_with_retries()
-                if user_input:
-                    print(f"User: {user_input}")
-                    last_interaction_time = time.time()
+    while True:
+        user_input = listen_with_retries()
+        if user_input:
+            user_input_lower = user_input.lower()
 
-                    user_input_lower = user_input.lower()
+            if "exit program" in user_input_lower:
+                pan_speech.speak("Goodbye! Shutting down now.")
+                curiosity_active = False
+                curiosity_thread.join(timeout=5)
+                break
 
-                    # Command processing
-                    if "exit program" in user_input_lower:
-                        pan_speech.speak("Goodbye! Shutting down now.")
-                        print("Exiting program on user request.")
-                        curiosity_active = False
-                        curiosity_thread.join(timeout=5)
-                        break
+            else:
+                response = pan_conversation.respond(user_input, user_id)
 
-                    if user_input_lower.startswith("search for"):
-                        search_query = user_input[10:].strip()
-                        response = pan_research.live_search(search_query, user_id)
-                    elif user_input_lower.startswith("weather"):
-                        response = pan_research.get_weather()
-                    elif user_input_lower.startswith("news"):
-                        response = pan_research.get_local_news()
-
-                    elif user_input_lower.startswith("share your thoughts"):
-                        response = pan_research.list_opinions(user_id, share=True)
-                    elif user_input_lower.startswith("adjust your opinion on"):
-                        parts = user_input.split(" to ")
-                        if len(parts) == 2:
-                            topic = (
-                                parts[0].replace("adjust your opinion on", "").strip()
-                            )
-                            new_thought = parts[1].strip()
-                            pan_research.adjust_opinion(topic, new_thought)
-                            response = f"Got it. I've adjusted my thoughts on {topic}."
-                        else:
-                            response = "Please use the format: Adjust your opinion on [topic] to [new thought]."
-                    elif "joke" in user_input_lower:
-                        jokes = [
-                            "Why don't scientists trust atoms? Because they make up everything!",
-                            "Why did the scarecrow win an award? Because he was outstanding in his field!",
-                            "Why did the bicycle fall over? Because it was two-tired!",
-                            "Why do programmers prefer dark mode? Because light attracts bugs!",
-                        ]
-                        response = random.choice(jokes)
-
-                    else:
-                        # General conversation handling
-                        response = pan_conversation.respond(user_input, user_id)
-
-                    # Adjust response based on user affinity level
-                    user_affinity = pan_research.get_affinity(user_id)
-                    if user_affinity < 0:
-                        response = response.replace(
-                            "I think", "Whatever, I guess"
-                        ).replace("I hope", "I don't care if")
-
-                    assistant_name = pan_config.ASSISTANT_NAME
-                    print(f"{assistant_name}: {response}")
-                    pan_speech.speak(response)
-
-                    time.sleep(0.3)  # pause to avoid the assistant hearing itself
-                else:
-                    print("No valid input detected, listening again...")
-
-            except KeyboardInterrupt:
-                # Handle CTRL+C during conversation loop by immediately exiting
-                print("\nInterrupted during conversation. Shutting down...")
-                raise
-
-    except KeyboardInterrupt:
-        # Handle CTRL+C for graceful shutdown
-        print("\nShutting down gracefully...")
-        curiosity_active = False
-        if "curiosity_thread" in locals():
-            curiosity_thread.join(timeout=5)
-        assistant_name = pan_config.ASSISTANT_NAME
-        print(f"{assistant_name} has been shut down. Goodbye!")
-        sys.exit(0)
+            assistant_name = pan_config.ASSISTANT_NAME
+            print(f"{assistant_name}: {response}")
+            pan_speech.speak(response)
+        else:
+            print("No valid input detected, listening again...")

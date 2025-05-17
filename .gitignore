@@ -57,7 +57,8 @@ pan_memory.db
 *.db
 *.log
 .env
-.env.*
+# Keep the example environment file
+!.env.example
 
 # IDE specific files
 .idea/
@@ -83,6 +84,8 @@ pan_memory.db
 .env.test
 .env.production
 .secrets
+# Keep the example environment file
+!.env.example
 
 # caches
 __pycache__/

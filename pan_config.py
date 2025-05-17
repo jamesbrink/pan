@@ -10,15 +10,25 @@ import os
 
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
-load_dotenv()
+# Load environment variables from .env file if it exists
+env_path = Path(__file__).parent / ".env"
+if env_path.exists():
+    load_dotenv(env_path)
+else:
+    print("Warning: .env file not found. Using default settings.")
 
 # Database settings
 DATABASE_PATH = os.getenv("DATABASE_PATH", "pan_memory.db")
 
-# API keys
-WEATHER_API_KEY = os.getenv("WEATHER_API_KEY")
+# API keys (Weather and News)
+OPENWEATHERMAP_API_KEY = os.getenv("OPENWEATHERMAP_API_KEY")
 NEWS_API_KEY = os.getenv("NEWS_API_KEY")
+
+if not OPENWEATHERMAP_API_KEY:
+    print("Warning: Weather API key is missing. Weather functionality will be limited.")
+
+if not NEWS_API_KEY:
+    print("Warning: News API key is missing. News functionality will be limited.")
 
 # Location settings
 DEFAULT_CITY = os.getenv("DEFAULT_CITY", "Kelso")
@@ -51,7 +61,6 @@ ENERGY_THRESHOLD = int(os.getenv("ENERGY_THRESHOLD", "300"))
 SPEECH_RECOGNITION_TIMEOUT = int(os.getenv("SPEECH_RECOGNITION_TIMEOUT", "5"))
 PHRASE_TIME_LIMIT = int(os.getenv("PHRASE_TIME_LIMIT", "10"))
 
-
 def get_config():
     """
     Return all configuration settings as a dictionary.
@@ -64,8 +73,8 @@ def get_config():
             "path": DATABASE_PATH,
         },
         "api_keys": {
-            "weather": WEATHER_API_KEY,
-            "news": NEWS_API_KEY,
+            "weather": WEATHER_API_KEY or "Not Set",
+            "news": NEWS_API_KEY or "Not Set",
         },
         "location": {
             "city": DEFAULT_CITY,
@@ -89,5 +98,11 @@ def get_config():
             "energy_threshold": ENERGY_THRESHOLD,
             "speech_recognition_timeout": SPEECH_RECOGNITION_TIMEOUT,
             "phrase_time_limit": PHRASE_TIME_LIMIT,
-        },
+        }
     }
+
+# Display configuration on startup (for debugging)
+if __name__ == "__main__":
+    print("Loaded Configuration:")
+    for key, value in get_config().items():
+        print(f"{key}: {value}")
