@@ -14,6 +14,7 @@ pyobjc-core>=9.0.1; sys_platform == 'darwin'
 # Utility packages
 numpy>=1.22.0
 python-dateutil>=2.8.2
+beautifulsoup4>=4.12.0
 
 # Development dependencies (optional)
 black>=23.1.0

@@ -21,10 +21,10 @@ else:
 DATABASE_PATH = os.getenv("DATABASE_PATH", "pan_memory.db")
 
 # API keys (Weather and News)
-WEATHER_API_KEY = os.getenv("WEATHER_API_KEY")
+OPENWEATHERMAP_API_KEY = os.getenv("OPENWEATHERMAP_API_KEY")
 NEWS_API_KEY = os.getenv("NEWS_API_KEY")
 
-if not WEATHER_API_KEY:
+if not OPENWEATHERMAP_API_KEY:
     print("Warning: Weather API key is missing. Weather functionality will be limited.")
 
 if not NEWS_API_KEY:
