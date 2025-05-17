@@ -15,18 +15,14 @@ class PanSettings:
         self.NEWS_API_KEY = "0df5b75db35c4289b12b44030508d563"
 
         # Default Location Settings
-        self.DEFAULT_CITY = "Kelso"  # Default city for weather queries
-        self.DEFAULT_COUNTRY_CODE = "US"  # Default country code
+        self.DEFAULT_CITY = "Kelso"
+        self.DEFAULT_COUNTRY_CODE = "US"
 
-    def set_openweathermap_api_key(self, key):
-        self.OPENWEATHERMAP_API_KEY = key
+        # Conversation Mode (Advanced GPT-2)
+        self.USE_GPT2_FOR_CONVERSATION = True  # Set to False to disable GPT-2
 
-    def set_news_api_key(self, key):
-        self.NEWS_API_KEY = key
-
-    def set_default_location(self, city, country_code="US"):
-        self.DEFAULT_CITY = city
-        self.DEFAULT_COUNTRY_CODE = country_code
+    def set_use_gpt2(self, enabled: bool):
+        self.USE_GPT2_FOR_CONVERSATION = enabled
 
 # Global settings instance
 pan_settings = PanSettings()
