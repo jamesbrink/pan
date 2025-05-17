@@ -10,6 +10,13 @@ import requests
 from bs4 import BeautifulSoup
 import pan_settings
 
+# Check API Keys
+if not pan_settings.pan_settings.OPENWEATHERMAP_API_KEY:
+    print("Warning: Weather API key is missing. Weather functionality will be limited.")
+
+if not pan_settings.pan_settings.NEWS_API_KEY:
+    print("Warning: News API key is missing. News functionality will be limited.")
+
 # Free Web Search using DuckDuckGo with Google Fallback
 def live_search(query):
     response = duckduckgo_search(query)
