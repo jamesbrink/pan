@@ -1,4 +1,10 @@
-# pan_conversation.py - Handles user conversations with persistent user recognition
+"""
+Conversation Engine for PAN
+
+This module handles the main conversation flow and user interaction logic.
+It routes user input to appropriate response handlers, manages user recognition,
+and coordinates emotional responses based on conversation context.
+"""
 
 import pan_research
 import pan_emotions
@@ -6,9 +12,24 @@ import pan_users
 from pan_speech import speak
 
 def respond(user_input, user_id):
+    """
+    Process user input and generate an appropriate response.
+    
+    This is the main function for handling conversation flow. It routes user input
+    to the appropriate handler based on content, manages user recognition,
+    and coordinates with other modules to generate contextually relevant responses.
+    
+    Args:
+        user_input (str): The text input from the user
+        user_id (str): Unique identifier for the current user
+        
+    Returns:
+        str: PAN's response to the user input
+    """
     # Check if user is known
     name = pan_users.get_user_name(user_id)
 
+    # User recognition for first-time users
     if not name:
         speak("I don't believe we've met. What's your name?", mood_override="curious")
         # For demo, prompt for name input; replace with voice recognition in production
@@ -16,6 +37,7 @@ def respond(user_input, user_id):
         pan_users.add_user(user_id, name)
         speak(f"Nice to meet you, {name}!", mood_override="happy")
 
+    # Handle empty or None input
     if user_input is None or user_input.strip() == "":
         response = "I didn't catch that. Could you please repeat?"
         speak(response, mood_override="sad")

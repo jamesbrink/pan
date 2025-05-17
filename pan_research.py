@@ -1,3 +1,11 @@
+"""
+Research and Web Capabilities for PAN
+
+This module provides PAN with the ability to gather information from the internet, 
+manage opinions, track user affinity, and access web APIs for real-time data like
+weather and news. It serves as PAN's connection to external data sources.
+"""
+
 import requests
 from bs4 import BeautifulSoup
 import pan_settings
@@ -12,61 +20,36 @@ def live_search(query):
 
 # DuckDuckGo Search
 def duckduckgo_search(query):
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-    }
+    headers = {"User-Agent": "Mozilla/5.0"}
     search_url = f"https://html.duckduckgo.com/html?q={query.replace(' ', '+')}"
     response = requests.get(search_url, headers=headers)
 
     if response.status_code == 200:
         soup = BeautifulSoup(response.text, 'html.parser')
-        results = []
-        for a in soup.find_all('a', class_='result__a', href=True):
-            results.append(a.get_text())
-
-        if results:
-            return f"Top search result: {results[0]}"
-        else:
-            return "Sorry, I couldn't find anything useful."
-
+        results = [a.get_text() for a in soup.find_all('a', class_='result__a')]
+        return results[0] if results else "No relevant result found."
+    
     return "Error: Could not connect to DuckDuckGo."
 
 # Google Search (Fallback)
 def google_search(query):
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-    }
+    headers = {"User-Agent": "Mozilla/5.0"}
     search_url = f"https://www.google.com/search?q={query.replace(' ', '+')}"
     response = requests.get(search_url, headers=headers)
 
     if response.status_code == 200:
         soup = BeautifulSoup(response.text, 'html.parser')
-        results = []
-        for g in soup.find_all('h3'):
-            results.append(g.get_text())
-
-        if results:
-            return f"Top Google search result: {results[0]}"
-        else:
-            return "Sorry, I couldn't find anything useful."
-
+        results = [g.get_text() for g in soup.find_all('h3')]
+        return results[0] if results else "No relevant result found."
+    
     return "Error: Could not connect to Google."
 
-# Archive for past news (implemented)
-def list_news_archive():
-    archive = [
-        "NASA's Artemis mission launches successfully.",
-        "OpenAI releases GPT-5 with enhanced capabilities.",
-        "Global temperatures hit record highs in 2025."
-    ]
-    return "Here's a brief news archive: " + ", ".join(archive)
-
-# Weather functionality (uses OpenWeatherMap API)
+# Weather Functionality (OpenWeatherMap API)
 def get_weather(city="Kelso", country_code="US"):
     api_key = pan_settings.OPENWEATHERMAP_API_KEY
     if not api_key:
         return "Weather API key is missing in settings."
-    
+
     url = f"http://api.openweathermap.org/data/2.5/weather?q={city},{country_code}&appid={api_key}&units=metric"
     try:
         response = requests.get(url)
@@ -77,7 +60,7 @@ def get_weather(city="Kelso", country_code="US"):
     except:
         return "Sorry, I couldn't fetch the weather data."
 
-# Local news functionality (live news API)
+# Local News Functionality (NewsAPI)
 def get_local_news():
     api_key = pan_settings.NEWS_API_KEY
     if not api_key:
@@ -86,14 +69,22 @@ def get_local_news():
     url = f"https://newsapi.org/v2/top-headlines?country=us&apiKey={api_key}"
     try:
         response = requests.get(url)
-        data = response.json()
-        articles = data.get("articles", [])
+        articles = response.json().get("articles", [])
         headlines = [article["title"] for article in articles[:5]]
-        return "Here are the latest news headlines: " + ", ".join(headlines)
+        return "Here are the latest news headlines: " + ", ".join(headlines) if headlines else "No news available."
     except:
         return "Sorry, I couldn't fetch the local news."
 
-# User opinions (now persistent)
+# Archive for Past News
+def list_news_archive():
+    archive = [
+        "NASA's Artemis mission launches successfully.",
+        "OpenAI releases GPT-5 with enhanced capabilities.",
+        "Global temperatures hit record highs in 2025."
+    ]
+    return "Here's a brief news archive: " + ", ".join(archive)
+
+# User Opinions (Dynamic and Configurable)
 def list_opinions(user_id, share=False):
     opinions = {
         "AI": "I think AI is a powerful tool that can help humanity.",
@@ -104,11 +95,11 @@ def list_opinions(user_id, share=False):
         return "Here's what I think: " + ", ".join([f"{topic}: {opinion}" for topic, opinion in opinions.items()])
     return "I have opinions on several topics. Ask me about AI, climate change, or space exploration."
 
-# Adjust stored opinions
+# Adjust User Opinions
 def adjust_opinion(topic, new_thought):
     print(f"Adjusting opinion on {topic} to: {new_thought}")
 
-# User affinity (simple example)
+# User Affinity Tracking (Simple Example)
 user_affinity = {}
 
 def get_affinity(user_id):
@@ -120,6 +111,7 @@ def warn_low_affinity(user_id):
         return "Warning: I don't trust you much."
     return ""
 
+# Multi-Step Research (Extensible)
 def multi_step_research(topic, user_id=None):
     response = live_search(topic)
     if "Sorry" in response:
