@@ -19,14 +19,21 @@ import time
 import random
 from datetime import datetime
 
-# Load configuration
-config = pan_config.get_config()
-
 # Global variables for tracking state
 curiosity_active = True
 last_interaction_time = time.time()
 last_speech_time = 0
-MIN_SPEECH_INTERVAL = config["conversation"]["min_speech_interval_seconds"]
+
+# Load Configuration Settings
+def load_config():
+    config = pan_config.get_config()
+    global MAX_SHORT_TERM_MEMORY, IDLE_THRESHOLD_SECONDS, MIN_SPEECH_INTERVAL_SECONDS
+    MAX_SHORT_TERM_MEMORY = config["conversation"]["max_short_term_memory"]
+    IDLE_THRESHOLD_SECONDS = config["conversation"]["idle_threshold_seconds"]
+    MIN_SPEECH_INTERVAL_SECONDS = config["conversation"]["min_speech_interval_seconds"]
+
+load_config()
+
 
 def get_time_based_greeting():
     hour = datetime.now().hour
@@ -39,19 +46,22 @@ def get_time_based_greeting():
     else:
         return "Hello!"
 
+
 def curiosity_loop():
     global last_interaction_time, last_speech_time
-    idle_threshold = config["conversation"]["idle_threshold_seconds"]
 
     while curiosity_active:
         time.sleep(10)
         idle_time = time.time() - last_interaction_time
-        if idle_time >= idle_threshold:
+
+        if idle_time >= IDLE_THRESHOLD_SECONDS:
             topic = random.choice(["space", "history", "technology", "science"])
             response = pan_research.live_search(topic)
             pan_speech.speak(f"I just learned something amazing about {topic}! {response}")
+
             last_speech_time = time.time()
             last_interaction_time = time.time()
+
 
 def listen_with_retries(max_attempts=3, timeout=5):
     for attempt in range(max_attempts):
@@ -62,6 +72,7 @@ def listen_with_retries(max_attempts=3, timeout=5):
             print(f"Listen attempt {attempt + 1} failed, retrying...")
             time.sleep(1)
     return None
+
 
 if __name__ == '__main__':
     print("Pan is starting...")
@@ -78,23 +89,33 @@ if __name__ == '__main__':
         user_input = listen_with_retries()
         if user_input:
             user_input_lower = user_input.lower()
+
             if "exit program" in user_input_lower:
                 pan_speech.speak("Goodbye! Shutting down now.")
                 curiosity_active = False
                 curiosity_thread.join(timeout=5)
                 break
-            elif user_input_lower.startswith("search for"):
-                search_query = user_input[10:].strip()
-                response = pan_research.live_search(search_query)
+
             elif user_input_lower.startswith("weather"):
-                city = config["location"]["city"]
-                country = config["location"]["country_code"]
-                response = pan_research.get_weather(city=city, country_code=country)
+                if "in " in user_input_lower:
+                    location = user_input_lower.split("in ")[1].strip()
+                    if "," in location:
+                        city, country = map(str.strip, location.split(","))
+                    else:
+                        city = location
+                        country = pan_settings.pan_settings.DEFAULT_COUNTRY_CODE
+                else:
+                    city = pan_settings.pan_settings.DEFAULT_CITY
+                    country = pan_settings.pan_settings.DEFAULT_COUNTRY_CODE
+
+                response = pan_research.get_weather(city, country)
+
             elif user_input_lower.startswith("news"):
                 response = pan_research.get_local_news()
+
             else:
                 response = pan_conversation.respond(user_input, user_id)
-            
+
             print(f"Pan: {response}")
             pan_speech.speak(response)
         else:

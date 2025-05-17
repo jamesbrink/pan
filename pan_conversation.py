@@ -1,115 +1,117 @@
 """
-PAN - Personal Assistant with Nuance
+PAN Conversation Module
 
-Main entry point for the PAN digital assistant. Handles initialization, 
-user interaction, command processing, and manages the autonomous curiosity system.
+Handles user input, dynamically determines the response, and integrates
+with the research and memory modules. Supports dynamic web search,
+weather information, and conversation flow management.
 """
 
-import pan_core
-import pan_conversation
+import pan_research
 import pan_emotions
-import pan_memory
 import pan_settings
 import pan_speech
-import pan_ai
-import pan_research
-import pan_config  # Centralized Configuration
-import threading
-import time
 import random
-from datetime import datetime
 
-# Global variables for tracking state
-curiosity_active = True
-last_interaction_time = time.time()
-last_speech_time = 0
+# Respond to user input
+def respond(user_input, user_id):
+    if not user_input or user_input.strip() == "":
+        return "Sorry, I didn't catch that."
 
-# Load Configuration Settings
-def load_config():
-    config = pan_config.get_config()
-    global MAX_SHORT_TERM_MEMORY, IDLE_THRESHOLD_SECONDS, MIN_SPEECH_INTERVAL_SECONDS
-    MAX_SHORT_TERM_MEMORY = config["conversation"]["max_short_term_memory"]
-    IDLE_THRESHOLD_SECONDS = config["conversation"]["idle_threshold_seconds"]
-    MIN_SPEECH_INTERVAL_SECONDS = config["conversation"]["min_speech_interval_seconds"]
+    user_input_lower = user_input.lower()
 
-load_config()
+    # Greeting detection
+    if any(greet in user_input_lower for greet in ["hello", "hi", "hey", "greetings"]):
+        return "Hello! How can I assist you today?"
 
+    # Asking about Pan's mood or feelings
+    if "how are you" in user_input_lower or "how do you feel" in user_input_lower:
+        mood_response = pan_emotions.pan_emotions.express_feelings()
+        return mood_response
 
-def get_time_based_greeting():
-    hour = datetime.now().hour
-    if 5 <= hour < 12:
-        return "Good morning!"
-    elif 12 <= hour < 17:
-        return "Good afternoon!"
-    elif 17 <= hour < 22:
-        return "Good evening!"
-    else:
-        return "Hello!"
-
-
-def curiosity_loop():
-    global last_interaction_time, last_speech_time
-
-    while curiosity_active:
-        time.sleep(10)
-        idle_time = time.time() - last_interaction_time
-
-        if idle_time >= IDLE_THRESHOLD_SECONDS:
-            topic = random.choice(["space", "history", "technology", "science"])
-            response = pan_research.live_search(topic)
-            pan_speech.speak(f"I just learned something amazing about {topic}! {response}")
-
-            last_speech_time = time.time()
-            last_interaction_time = time.time()
-
-
-def listen_with_retries(max_attempts=3, timeout=5):
-    for attempt in range(max_attempts):
-        text = pan_speech.listen_to_user(timeout=timeout)
-        if text:
-            return text
+    # Dynamic Weather Location Setting
+    if user_input_lower.startswith("set default city to"):
+        location = user_input_lower.replace("set default city to", "").strip()
+        if "," in location:
+            city, country = map(str.strip, location.split(","))
+            pan_settings.pan_settings.set_default_location(city, country)
+            return f"Default location set to {city}, {country}."
         else:
-            print(f"Listen attempt {attempt + 1} failed, retrying...")
-            time.sleep(1)
-    return None
+            pan_settings.pan_settings.set_default_location(location)
+            return f"Default city set to {location}."
 
+    # Weather queries (configurable)
+    if "weather" in user_input_lower:
+        city = pan_settings.pan_settings.DEFAULT_CITY
+        country = pan_settings.pan_settings.DEFAULT_COUNTRY_CODE
+        return pan_research.get_weather(city, country)
 
-if __name__ == '__main__':
-    print("Pan is starting...")
-    pan_core.initialize_pan()
-    greeting = get_time_based_greeting()
-    pan_speech.speak(f"{greeting} I'm Pan, ready to help you. How can I assist you today?")
+    # Local news queries
+    if "news" in user_input_lower:
+        return pan_research.get_local_news()
 
-    curiosity_thread = threading.Thread(target=curiosity_loop, daemon=True)
-    curiosity_thread.start()
+    # Direct search queries
+    if any(prefix in user_input_lower for prefix in ["search for", "what is", "who is", "tell me about", "explain"]):
+        query = user_input_lower.replace("search for", "").replace("what is", "").replace("who is", "").replace("tell me about", "").replace("explain", "").strip()
+        return pan_research.live_search(query)
 
-    user_id = "default_user"
+    # Multi-step research queries
+    if "deep dive on" in user_input_lower:
+        topic = user_input_lower.replace("deep dive on", "").strip()
+        return pan_research.multi_step_research(topic)
 
-    while True:
-        user_input = listen_with_retries()
-        if user_input:
-            user_input_lower = user_input.lower()
+    # User opinions
+    if "your opinions" in user_input_lower or "what do you think" in user_input_lower:
+        return pan_research.list_opinions(user_id, share=True)
 
-            if "exit program" in user_input_lower:
-                pan_speech.speak("Goodbye! Shutting down now.")
-                curiosity_active = False
-                curiosity_thread.join(timeout=5)
-                break
+    # Adjusting opinions
+    if user_input_lower.startswith("adjust your opinion on"):
+        parts = user_input.split(" to ")
+        if len(parts) == 2:
+            topic = parts[0].replace("adjust your opinion on", "").strip()
+            new_thought = parts[1].strip()
+            pan_settings.pan_settings.set_default_location(topic, new_thought)
+            return f"I've adjusted my thoughts on {topic}."
 
-            elif user_input_lower.startswith("search for"):
-                search_query = user_input[10:].strip()
-                response = pan_research.live_search(search_query)
+    # Comfort user if sad
+    if any(phrase in user_input_lower for phrase in ["i'm sad", "i feel down", "i feel lonely", "i'm depressed"]):
+        return "I'm here for you. You're not alone."
 
-            elif user_input_lower.startswith("weather"):
-                response = pan_research.get_weather()
+    # Joke response
+    if "joke" in user_input_lower:
+        jokes = [
+            "Why don't scientists trust atoms? Because they make up everything!",
+            "Why did the scarecrow win an award? Because he was outstanding in his field!",
+            "Why did the bicycle fall over? Because it was two-tired!",
+            "Why do programmers prefer dark mode? Because light attracts bugs!",
+            "Why don't programmers like nature? It has too many bugs!"
+        ]
+        return random.choice(jokes)
 
-            elif user_input_lower.startswith("news"):
-                response = pan_research.get_local_news()
+    # Custom memory-based responses
+    if "remember" in user_input_lower:
+        memory_content = user_input_lower.replace("remember", "").strip()
+        pan_memory.store_memory(user_id, memory_content)
+        return f"I'll remember that you said: {memory_content}"
 
-            else:
-                response = pan_conversation.respond(user_input, user_id)
-
-            print(f"Pan: {response}")
-            pan_speech.speak(response)
+    if "what do you remember" in user_input_lower:
+        memories = pan_memory.retrieve_memories(user_id)
+        if memories:
+            return "Here's what I remember: " + ", ".join(memories)
         else:
-            print("No valid input detected, listening again...")
+            return "I don't seem to remember anything specific right now."
+
+    # Curiosity-driven learning
+    if "curious about" in user_input_lower:
+        topic = user_input_lower.replace("curious about", "").strip()
+        response = pan_research.live_search(topic)
+        return f"I just learned something amazing about {topic}! {response}"
+
+    # Affinity warning (for low affinity users)
+    if "do you trust me" in user_input_lower:
+        affinity = pan_research.get_affinity(user_id)
+        if affinity < -5:
+            return "I don't trust you much."
+        return "Of course! We get along well."
+
+    # Fallback to search if nothing else matches
+    return pan_research.live_search(user_input)
