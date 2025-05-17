@@ -96,23 +96,6 @@ if __name__ == '__main__':
                 curiosity_thread.join(timeout=5)
                 break
 
-            elif user_input_lower.startswith("weather"):
-                if "in " in user_input_lower:
-                    location = user_input_lower.split("in ")[1].strip()
-                    if "," in location:
-                        city, country = map(str.strip, location.split(","))
-                    else:
-                        city = location
-                        country = pan_settings.pan_settings.DEFAULT_COUNTRY_CODE
-                else:
-                    city = pan_settings.pan_settings.DEFAULT_CITY
-                    country = pan_settings.pan_settings.DEFAULT_COUNTRY_CODE
-
-                response = pan_research.get_weather(city, country)
-
-            elif user_input_lower.startswith("news"):
-                response = pan_research.get_local_news()
-
             else:
                 response = pan_conversation.respond(user_input, user_id)
 
