@@ -1,4 +1,8 @@
-# pan_settings.py
+import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 class PanSettings:
     def __init__(self):
@@ -10,19 +14,22 @@ class PanSettings:
             "Avoid harmful topics."
         ]
 
-        # API Keys (Configure here)
-        self.OPENWEATHERMAP_API_KEY = "1cde1e0fa62fea2a862d4089901cf775"
-        self.NEWS_API_KEY = "0df5b75db35c4289b12b44030508d563"
+        # API Keys (Loaded from .env)
+        self.OPENWEATHERMAP_API_KEY = os.getenv("OPENWEATHERMAP_API_KEY")
+        self.NEWS_API_KEY = os.getenv("NEWS_API_KEY")
 
         # Default Location Settings
         self.DEFAULT_CITY = "Kelso"
         self.DEFAULT_COUNTRY_CODE = "US"
 
-        # Conversation Mode (Advanced GPT-2)
-        self.USE_GPT2_FOR_CONVERSATION = True  # Set to False to disable GPT-2
+        # Conversation Mode (Advanced GPT-J)
+        self.USE_GPT2_FOR_CONVERSATION = True  # Set to False to disable GPT-J
 
-    def set_use_gpt2(self, enabled: bool):
-        self.USE_GPT2_FOR_CONVERSATION = enabled
+    def set_openweathermap_api_key(self, key):
+        self.OPENWEATHERMAP_API_KEY = key
+
+    def set_news_api_key(self, key):
+        self.NEWS_API_KEY = key
 
 # Global settings instance
 pan_settings = PanSettings()
