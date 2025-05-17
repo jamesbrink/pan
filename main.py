@@ -92,6 +92,9 @@ def listen_with_retries(max_attempts=3, timeout=5):
         
     Returns:
         str or None: Transcribed speech text if successful, None if all attempts fail
+        
+    Raises:
+        KeyboardInterrupt: Re-raises keyboard interrupt to allow clean exit
     """
     for attempt in range(max_attempts):
         wait_start = time.time()
@@ -109,12 +112,18 @@ def listen_with_retries(max_attempts=3, timeout=5):
                 last_log_time = int(elapsed)
             time.sleep(0.1)
 
-        text = pan_speech.listen_to_user(timeout=timeout)
-        if text:
-            return text
-        else:
-            print(f"Listen attempt {attempt + 1} failed, retrying...")
-            time.sleep(1)
+        try:
+            text = pan_speech.listen_to_user(timeout=timeout)
+            if text:
+                return text
+            else:
+                print(f"Listen attempt {attempt + 1} failed, retrying...")
+                time.sleep(1)
+        except KeyboardInterrupt:
+            # Re-raise the keyboard interrupt to ensure it's caught by the main try/except
+            print("\nKeyboard interrupt detected during listening...")
+            raise
+            
     print("Max listen attempts reached without success.")
     return None
 
@@ -205,8 +214,9 @@ if __name__ == '__main__':
                     print("No valid input detected, listening again...")
                     
             except KeyboardInterrupt:
-                # Handle CTRL+C during conversation loop
-                continue
+                # Handle CTRL+C during conversation loop by immediately exiting
+                print("\nInterrupted during conversation. Shutting down...")
+                raise
                 
     except KeyboardInterrupt:
         # Handle CTRL+C for graceful shutdown
