@@ -10,15 +10,25 @@ import os
 from dotenv import load_dotenv
 from pathlib import Path
 
-# Load environment variables from .env file
-load_dotenv()
+# Load environment variables from .env file if it exists
+env_path = Path(__file__).parent / ".env"
+if env_path.exists():
+    load_dotenv(env_path)
+else:
+    print("Warning: .env file not found. Using default settings.")
 
 # Database settings
 DATABASE_PATH = os.getenv("DATABASE_PATH", "pan_memory.db")
 
-# API keys
+# API keys (Weather and News)
 WEATHER_API_KEY = os.getenv("WEATHER_API_KEY")
 NEWS_API_KEY = os.getenv("NEWS_API_KEY")
+
+if not WEATHER_API_KEY:
+    print("Warning: Weather API key is missing. Weather functionality will be limited.")
+
+if not NEWS_API_KEY:
+    print("Warning: News API key is missing. News functionality will be limited.")
 
 # Location settings
 DEFAULT_CITY = os.getenv("DEFAULT_CITY", "Kelso")
@@ -45,8 +55,8 @@ def get_config():
             "path": DATABASE_PATH,
         },
         "api_keys": {
-            "weather": WEATHER_API_KEY,
-            "news": NEWS_API_KEY,
+            "weather": WEATHER_API_KEY or "Not Set",
+            "news": NEWS_API_KEY or "Not Set",
         },
         "location": {
             "city": DEFAULT_CITY,
@@ -62,3 +72,9 @@ def get_config():
             "min_speech_interval_seconds": MIN_SPEECH_INTERVAL_SECONDS,
         }
     }
+
+# Display configuration on startup (for debugging)
+if __name__ == "__main__":
+    print("Loaded Configuration:")
+    for key, value in get_config().items():
+        print(f"{key}: {value}")
