@@ -24,9 +24,18 @@ NEWS_API_KEY = os.getenv("NEWS_API_KEY")
 DEFAULT_CITY = os.getenv("DEFAULT_CITY", "Kelso")
 DEFAULT_COUNTRY_CODE = os.getenv("DEFAULT_COUNTRY_CODE", "US")
 
+# Assistant settings
+ASSISTANT_NAME = os.getenv("ASSISTANT_NAME", "Pan")
+
 # Voice settings
 DEFAULT_VOICE_RATE = int(os.getenv("DEFAULT_VOICE_RATE", "160"))
 DEFAULT_VOICE_VOLUME = float(os.getenv("DEFAULT_VOICE_VOLUME", "0.9"))
+
+# Platform-specific voice settings
+import platform
+if platform.system() == 'Darwin':
+    # macOS typically needs a higher rate for NSSpeechSynthesizer
+    DEFAULT_VOICE_RATE = int(os.getenv("MACOS_VOICE_RATE", "190"))
 
 # Conversation settings
 MAX_SHORT_TERM_MEMORY = int(os.getenv("MAX_SHORT_TERM_MEMORY", "10"))
@@ -61,6 +70,9 @@ def get_config():
         "location": {
             "city": DEFAULT_CITY,
             "country_code": DEFAULT_COUNTRY_CODE,
+        },
+        "assistant": {
+            "name": ASSISTANT_NAME,
         },
         "voice": {
             "rate": DEFAULT_VOICE_RATE,

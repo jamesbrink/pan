@@ -65,8 +65,11 @@ def curiosity_loop():
         if idle_time >= idle_threshold:
             now = time.time()
             if now - last_speech_time >= MIN_SPEECH_INTERVAL:
-                research_topic = random.choice(["space", "history", "technology", "science"])
-                print(f"Pan is curious about {research_topic}...")
+                research_topic = random.choice(
+                    ["space", "history", "technology", "science"]
+                )
+                assistant_name = pan_config.ASSISTANT_NAME
+                print(f"{assistant_name} is curious about {research_topic}...")
                 pan_speech.speak(
                     f"I'm curious about {research_topic}. Let me see what I can find.",
                     mood_override="curious",
@@ -74,7 +77,7 @@ def curiosity_loop():
 
                 search_response = pan_research.live_search(research_topic)
                 pan_memory.remember(research_topic, search_response)
-                print(f"Pan's curiosity: {search_response}")
+                print(f"{assistant_name}'s curiosity: {search_response}")
 
                 pan_speech.speak(
                     f"I just learned something amazing about {research_topic}! Did you know? {search_response}"
@@ -140,12 +143,22 @@ def listen_with_retries(max_attempts=3, timeout=5):
 
 if __name__ == "__main__":
     try:
-        print("Pan is starting...")
+        assistant_name = pan_config.ASSISTANT_NAME
+        print(f"{assistant_name} is starting...")
         pan_core.initialize_pan()
-
-        greeting = get_time_based_greeting()
+        
+        # Streamlined greeting that introduces assistant with time-based greeting included
+        hour = datetime.now().hour
+        time_greeting = "Good morning" if 5 <= hour < 12 else "Good afternoon" if 12 <= hour < 17 else "Good evening" if 17 <= hour < 22 else "Hello"
+        
+        # Full name explanation based on assistant name
+        # If name is "Pan", include the "Personal Assistant with Nuance" explanation
+        # Otherwise, just use the custom name
+        name_explanation = "your Personal Assistant with Nuance" if assistant_name == "Pan" else ""
+        name_connector = ", " if name_explanation else ""
+        
         pan_speech.speak(
-            f"{greeting} I'm Pan, ready to help you. How can I assist you today?"
+            f"{time_greeting}! I'm {assistant_name}{name_connector}{name_explanation}. I can help you search for information, check the weather, get news updates, or just chat. What can I do for you today?"
         )
 
         # Start background thread for autonomous curiosity
@@ -213,10 +226,11 @@ if __name__ == "__main__":
                             "I think", "Whatever, I guess"
                         ).replace("I hope", "I don't care if")
 
-                    print(f"Pan: {response}")
+                    assistant_name = pan_config.ASSISTANT_NAME
+                    print(f"{assistant_name}: {response}")
                     pan_speech.speak(response)
 
-                    time.sleep(0.3)  # pause to avoid Pan hearing itself
+                    time.sleep(0.3)  # pause to avoid the assistant hearing itself
                 else:
                     print("No valid input detected, listening again...")
 
@@ -231,5 +245,6 @@ if __name__ == "__main__":
         curiosity_active = False
         if "curiosity_thread" in locals():
             curiosity_thread.join(timeout=5)
-        print("Pan has been shut down. Goodbye!")
+        assistant_name = pan_config.ASSISTANT_NAME
+        print(f"{assistant_name} has been shut down. Goodbye!")
         sys.exit(0)

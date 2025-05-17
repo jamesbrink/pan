@@ -89,13 +89,33 @@ class SpeakManager:
             self.sapi_engine = None
 
     def _init_engine(self):
-        """Initialize the pyttsx3 TTS engine."""
+        """Initialize the pyttsx3 TTS engine with platform-specific optimizations."""
         print("[SpeakManager] Initializing pyttsx3 engine")
+        import platform
+        
+        system = platform.system()
+        
         try:
-            # Try to use espeak driver explicitly first
-            self.engine = pyttsx3.init(driverName="espeak")
+            if system == 'Darwin':
+                # On macOS, use the default NSS driver and increase rate
+                self.engine = pyttsx3.init()
+                # Get available voices and try to find a high-quality voice
+                voices = self.engine.getProperty('voices')
+                for voice in voices:
+                    # Look for higher quality voices - typically ones with "premium" or "enhanced" in the name
+                    if voice.name.lower().find('premium') != -1 or voice.name.lower().find('enhanced') != -1:
+                        self.engine.setProperty('voice', voice.id)
+                        print(f"[SpeakManager] Using enhanced macOS voice: {voice.name}")
+                        break
+            elif system == 'Linux':
+                # Try to use espeak driver explicitly on Linux
+                self.engine = pyttsx3.init(driverName="espeak")
+            else:
+                # Fall back to default initialization for Windows and others
+                self.engine = pyttsx3.init()
+                
         except (ImportError, RuntimeError, ValueError) as engine_error:
-            print(f"Failed to init with espeak driver: {engine_error}")
+            print(f"Failed to init with platform-specific driver: {engine_error}")
             try:
                 # Fall back to default initialization
                 self.engine = pyttsx3.init()
@@ -121,26 +141,59 @@ class SpeakManager:
     def _chunk_text(self, text):
         """
         Split long text into smaller chunks for better TTS processing.
+        Optimized with platform-specific chunk sizes.
 
         Args:
             text (str): The text to split into chunks
 
         Returns:
-            list: A list of text chunks, each below MAX_CHUNK_LENGTH
+            list: A list of text chunks optimized for the current platform
         """
         import re
-
+        import platform
+        
+        system = platform.system()
+        
+        # Use platform-specific chunk sizes
+        # macOS NSSpeechSynthesizer performs better with larger chunks
+        chunk_size = 300 if system == 'Darwin' else MAX_CHUNK_LENGTH
+        
+        # Split on sentence boundaries
         sentences = re.split(r"(?<=[.!?]) +", text)
+        
+        # Fast path for short text (no chunking needed)
+        if len(text) <= chunk_size:
+            return [text]
+            
         chunks = []
         current = ""
         for sentence in sentences:
-            if len(current) + len(sentence) <= MAX_CHUNK_LENGTH:
+            if len(current) + len(sentence) <= chunk_size:
                 current += sentence + " "
             else:
-                chunks.append(current.strip())
-                current = sentence + " "
+                # If we have content to add, add it
+                if current:
+                    chunks.append(current.strip())
+                    
+                # If the sentence itself is too long, we need to split it further
+                if len(sentence) > chunk_size:
+                    # Split on commas and other natural pauses for very long sentences
+                    subparts = re.split(r"(?<=,|;|:) +", sentence)
+                    subcurrent = ""
+                    for part in subparts:
+                        if len(subcurrent) + len(part) <= chunk_size:
+                            subcurrent += part + " "
+                        else:
+                            if subcurrent:
+                                chunks.append(subcurrent.strip())
+                            subcurrent = part + " "
+                    if subcurrent:
+                        chunks.append(subcurrent.strip())
+                else:
+                    current = sentence + " "
         if current:
             chunks.append(current.strip())
+            
         return chunks
 
     def _create_dummy_engine(self):
@@ -172,12 +225,16 @@ class SpeakManager:
         """
         Speak a single chunk of text with the given mood.
 
-        Attempts to use Windows SAPI if available, falling back to pyttsx3.
+        Uses platform-specific optimizations and falls back if needed.
 
         Args:
             chunk (str): The text chunk to speak
             mood (str): The emotional mood to apply to the voice
         """
+        import platform
+        system = platform.system()
+        
+        # Use Windows SAPI if available
         if self.sapi_engine:
             try:
                 print("[SpeakManager] Using Windows SAPI for TTS chunk.")
@@ -185,13 +242,27 @@ class SpeakManager:
                 return
             except (AttributeError, RuntimeError) as sapi_error:
                 print(f"SAPI TTS failed: {sapi_error}")
-        try:
-            self.set_voice_by_mood(mood)
-            self.engine.say(chunk)
-            self.engine.runAndWait()
-        except (AttributeError, RuntimeError) as tts_error:
-            print(f"TTS error in chunk: {tts_error}")
-            traceback.print_exc()
+        
+        # macOS-specific optimizations
+        if system == 'Darwin':
+            try:
+                # We already set the voice parameters in the worker, no need to call set_voice_by_mood each time
+                # This avoids the overhead of changing properties for each chunk
+                self.engine.say(chunk)
+                self.engine.runAndWait()
+            except (AttributeError, RuntimeError) as tts_error:
+                print(f"macOS TTS error in chunk: {tts_error}")
+                traceback.print_exc()
+        else:
+            # For non-macOS platforms
+            try:
+                # We set this in the worker, but some engines might need it per chunk
+                self.set_voice_by_mood(mood)
+                self.engine.say(chunk)
+                self.engine.runAndWait()
+            except (AttributeError, RuntimeError) as tts_error:
+                print(f"TTS error in chunk: {tts_error}")
+                traceback.print_exc()
 
     def _worker(self):
         """
@@ -204,16 +275,27 @@ class SpeakManager:
             text, mood = self.queue.get()
             try:
                 with self.lock:
-                    self.engine.stop()
-                    self._init_engine()
-
+                    # Don't reinitialize the engine for every speech - this is a major
+                    # performance issue especially on macOS
+                    # Only stop the engine if it's already speaking
+                    if hasattr(self.engine, 'isBusy') and self.engine.isBusy():
+                        self.engine.stop()
+                    
                     print("[SpeakManager] Speaking started")
                     self.speaking_event.set()
 
+                    # Set voice parameters once before speaking
+                    self.set_voice_by_mood(mood)
+                    
+                    # Detect platform to optimize for macOS
+                    import platform
+                    is_macos = platform.system() == 'Darwin'
+                    
                     chunks = self._chunk_text(text)
                     for chunk in chunks:
                         self._speak_chunk(chunk, mood)
-                        time.sleep(0.05)
+                        # Reduced sleep time for macOS to improve responsiveness
+                        time.sleep(0.01 if is_macos else 0.05)
 
                     self.speech_count += 1
                     print("[SpeakManager] Speaking ended")
