@@ -1,16 +1,6 @@
-"""
-Settings Management for PAN
-
-This module manages PAN's behavior settings, content restrictions,
-and moral guidelines. It provides controls for what PAN will and 
-will not discuss, and what principles guide its interactions.
-"""
+# pan_settings.py
 
 class PanSettings:
-    """
-    Manages configuration and content restrictions for PAN.
-    """
-
     def __init__(self):
         self.forbidden_topics = ["sexual anatomy", "drugs", "violence"]
         self.moral_imperatives = [
@@ -19,15 +9,24 @@ class PanSettings:
             "Respect others.",
             "Avoid harmful topics."
         ]
+
         # API Keys (Configure here)
-        self.OPENWEATHERMAP_API_KEY = "YOUR_OPENWEATHERMAP_API_KEY"
-        self.NEWS_API_KEY = "YOUR_NEWS_API_KEY"
+        self.OPENWEATHERMAP_API_KEY = "1cde1e0fa62fea2a862d4089901cf775"
+        self.NEWS_API_KEY = "0df5b75db35c4289b12b44030508d563"
+
+        # Default Location Settings
+        self.DEFAULT_CITY = "Kelso"  # Default city for weather queries
+        self.DEFAULT_COUNTRY_CODE = "US"  # Default country code
 
     def set_openweathermap_api_key(self, key):
         self.OPENWEATHERMAP_API_KEY = key
 
     def set_news_api_key(self, key):
         self.NEWS_API_KEY = key
+
+    def set_default_location(self, city, country_code="US"):
+        self.DEFAULT_CITY = city
+        self.DEFAULT_COUNTRY_CODE = country_code
 
 # Global settings instance
 pan_settings = PanSettings()

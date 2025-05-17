@@ -22,58 +22,69 @@ def live_search(query):
 def duckduckgo_search(query):
     headers = {"User-Agent": "Mozilla/5.0"}
     search_url = f"https://html.duckduckgo.com/html?q={query.replace(' ', '+')}"
-    response = requests.get(search_url, headers=headers)
+    try:
+        response = requests.get(search_url, headers=headers, timeout=10)
+        if response.status_code == 200:
+            soup = BeautifulSoup(response.text, 'html.parser')
+            results = [a.get_text() for a in soup.find_all('a', class_='result__a')]
+            return results[0] if results else "No relevant result found."
+    except requests.RequestException:
+        return "Error: Could not connect to DuckDuckGo."
 
-    if response.status_code == 200:
-        soup = BeautifulSoup(response.text, 'html.parser')
-        results = [a.get_text() for a in soup.find_all('a', class_='result__a')]
-        return results[0] if results else "No relevant result found."
-    
     return "Error: Could not connect to DuckDuckGo."
 
 # Google Search (Fallback)
 def google_search(query):
     headers = {"User-Agent": "Mozilla/5.0"}
     search_url = f"https://www.google.com/search?q={query.replace(' ', '+')}"
-    response = requests.get(search_url, headers=headers)
+    try:
+        response = requests.get(search_url, headers=headers, timeout=10)
+        if response.status_code == 200:
+            soup = BeautifulSoup(response.text, 'html.parser')
+            results = [g.get_text() for g in soup.find_all('h3')]
+            return results[0] if results else "No relevant result found."
+    except requests.RequestException:
+        return "Error: Could not connect to Google."
 
-    if response.status_code == 200:
-        soup = BeautifulSoup(response.text, 'html.parser')
-        results = [g.get_text() for g in soup.find_all('h3')]
-        return results[0] if results else "No relevant result found."
-    
     return "Error: Could not connect to Google."
 
 # Weather Functionality (OpenWeatherMap API)
 def get_weather(city="Kelso", country_code="US"):
-    api_key = pan_settings.OPENWEATHERMAP_API_KEY
+    api_key = pan_settings.pan_settings.OPENWEATHERMAP_API_KEY
     if not api_key:
         return "Weather API key is missing in settings."
 
     url = f"http://api.openweathermap.org/data/2.5/weather?q={city},{country_code}&appid={api_key}&units=metric"
     try:
-        response = requests.get(url)
+        response = requests.get(url, timeout=10)
         data = response.json()
-        temp = data["main"]["temp"]
-        description = data["weather"][0]["description"]
-        return f"The current temperature in {city} is {temp}°C with {description}."
-    except:
-        return "Sorry, I couldn't fetch the weather data."
+        if "main" in data:
+            temp = data["main"]["temp"]
+            description = data["weather"][0]["description"]
+            return f"The current temperature in {city} is {temp}°C with {description}."
+        else:
+            return "Sorry, I couldn't fetch the weather data. Check the city name or try again."
+    except requests.RequestException:
+        return "Error: Could not connect to the weather service."
 
 # Local News Functionality (NewsAPI)
 def get_local_news():
-    api_key = pan_settings.NEWS_API_KEY
+    api_key = pan_settings.pan_settings.NEWS_API_KEY
     if not api_key:
         return "News API key is missing in settings."
     
     url = f"https://newsapi.org/v2/top-headlines?country=us&apiKey={api_key}"
     try:
-        response = requests.get(url)
-        articles = response.json().get("articles", [])
-        headlines = [article["title"] for article in articles[:5]]
-        return "Here are the latest news headlines: " + ", ".join(headlines) if headlines else "No news available."
-    except:
-        return "Sorry, I couldn't fetch the local news."
+        response = requests.get(url, timeout=10)
+        data = response.json()
+        articles = data.get("articles", [])
+        if articles:
+            headlines = [article["title"] for article in articles[:5]]
+            return "Here are the latest news headlines: " + ", ".join(headlines)
+        else:
+            return "No news available right now."
+    except requests.RequestException:
+        return "Error: Could not connect to the news service."
 
 # Archive for Past News
 def list_news_archive():
