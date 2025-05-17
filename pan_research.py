@@ -8,7 +8,7 @@ weather and news. It serves as PAN's connection to external data sources.
 
 import sqlite3
 
-import requests
+import requests  # type: ignore # Missing type stubs
 
 from pan_config import (
     DATABASE_PATH,
@@ -173,7 +173,7 @@ def list_opinions(user_id, share=False):
     # Placeholder: Return dummy opinion
     # Parameters are unused in this placeholder implementation
     _ = user_id  # Mark as used
-    _ = share    # Mark as used
+    _ = share  # Mark as used
     return "I think technology is fascinating."
 
 
@@ -187,7 +187,7 @@ def adjust_opinion(topic, new_thought):
     """
     # Placeholder: Store or update opinion
     # Parameters are unused in this placeholder implementation
-    _ = topic        # Mark as used
+    _ = topic  # Mark as used
     _ = new_thought  # Mark as used
     # Implementation will be added later
 

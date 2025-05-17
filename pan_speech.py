@@ -10,11 +10,24 @@ import queue
 import threading
 import time
 import traceback
+import warnings
 
 import pyttsx3
-import speech_recognition as sr
 
-from pan_config import DEFAULT_VOICE_RATE, DEFAULT_VOICE_VOLUME
+# Suppress deprecation warnings for speech_recognition library dependencies
+with warnings.catch_warnings():
+    warnings.filterwarnings("ignore", category=DeprecationWarning)
+    import speech_recognition as sr
+
+from pan_config import (
+    AMBIENT_NOISE_DURATION,
+    DEFAULT_VOICE_RATE,
+    DEFAULT_VOICE_VOLUME,
+    ENERGY_THRESHOLD,
+    PHRASE_TIME_LIMIT,
+    SPEECH_RECOGNITION_TIMEOUT,
+    USE_DYNAMIC_ENERGY_THRESHOLD,
+)
 from pan_emotions import pan_emotions
 
 # Try to import Windows SAPI for better speech synthesis on Windows
@@ -61,6 +74,7 @@ class SpeakManager:
         Sets up the TTS engine, creates a queue for speech requests,
         and starts a background worker thread to process speech tasks.
         """
+        self.engine = None  # Initialize engine attribute
         self._init_engine()
         self.queue = queue.Queue()
         self.lock = threading.Lock()
@@ -133,17 +147,23 @@ class SpeakManager:
         """Create a dummy engine that just prints text when TTS fails."""
 
         class DummyEngine:
+            """Dummy TTS engine that prints text instead of speaking."""
+
             def say(self, text):
+                """Print text instead of speaking it."""
                 print(f"[TTS FALLBACK] Speaking: {text}")
 
             def runAndWait(self):
-                pass
+                """Dummy implementation of runAndWait."""
+                return
 
             def stop(self):
-                pass
+                """Dummy implementation of stop."""
+                return
 
-            def setProperty(self, prop, value):
-                pass
+            def setProperty(self, _, __):
+                """Dummy implementation of setProperty."""
+                return
 
         self.engine = DummyEngine()
         print("[SpeakManager] Using fallback dummy TTS engine")
@@ -255,7 +275,40 @@ def warn_low_affinity(user_id):
     return ""
 
 
-def listen_to_user(timeout=5):
+def recalibrate_microphone():
+    """
+    Recalibrate the microphone for ambient noise.
+
+    This function performs a longer calibration phase to better adjust
+    to the current ambient noise conditions.
+
+    Returns:
+        bool: True if recalibration was successful, False otherwise
+    """
+    try:
+        recognizer = sr.Recognizer()
+        mic = sr.Microphone()
+
+        print("Recalibrating microphone...")
+        print("Please remain quiet for a moment...")
+
+        with mic as source:
+            # Use a longer duration for explicit recalibration
+            duration = max(AMBIENT_NOISE_DURATION * 2, 5.0)
+            recognizer.adjust_for_ambient_noise(source, duration=duration)
+
+        print(
+            f"Recalibration complete. Energy threshold: {recognizer.energy_threshold}"
+        )
+        return True
+
+    except (sr.RequestError, sr.WaitTimeoutError, OSError, IOError) as e:
+        # Catch specific exceptions instead of broad Exception
+        print(f"Error during microphone recalibration: {e}")
+        return False
+
+
+def listen_to_user(timeout=None, recalibrate=False):
     """
     Listen for user speech input and convert it to text.
 
@@ -263,7 +316,9 @@ def listen_to_user(timeout=5):
     then uses Google's speech recognition service to convert it to text.
 
     Args:
-        timeout (int): Maximum seconds to wait for speech to begin
+        timeout (int, optional): Maximum seconds to wait for speech to begin.
+                               If None, uses SPEECH_RECOGNITION_TIMEOUT from config.
+        recalibrate (bool): Force recalibration of ambient noise levels
 
     Returns:
         str or None: Transcribed speech text if successful, None if unsuccessful
@@ -271,15 +326,32 @@ def listen_to_user(timeout=5):
     Raises:
         KeyboardInterrupt: Propagates keyboard interrupt for proper handling
     """
+    if timeout is None:
+        timeout = SPEECH_RECOGNITION_TIMEOUT
     recognizer = sr.Recognizer()
     mic = sr.Microphone()
 
     try:
         with mic as source:
             print("Listening...")
-            recognizer.adjust_for_ambient_noise(source, duration=1.5)
+            # Use configurable noise sampling duration for better filtering
+            calibrate_duration = AMBIENT_NOISE_DURATION
+            if recalibrate:
+                # Use a longer duration for explicit recalibration
+                calibrate_duration = max(AMBIENT_NOISE_DURATION, 5.0)
+                print(f"Recalibrating microphone for {calibrate_duration} seconds...")
+
+            recognizer.adjust_for_ambient_noise(source, duration=calibrate_duration)
+
+            # Apply configurable energy threshold settings
+            recognizer.dynamic_energy_threshold = USE_DYNAMIC_ENERGY_THRESHOLD
+            recognizer.energy_threshold = ENERGY_THRESHOLD
+
             try:
-                audio = recognizer.listen(source, timeout=timeout)
+                # Use configurable phrase time limit
+                audio = recognizer.listen(
+                    source, timeout=timeout, phrase_time_limit=PHRASE_TIME_LIMIT
+                )
             except sr.WaitTimeoutError:
                 print("Listening timed out while waiting for phrase to start")
                 return None
