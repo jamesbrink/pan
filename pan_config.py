@@ -7,8 +7,8 @@ from a .env file if present.
 """
 
 import os
+
 from dotenv import load_dotenv
-from pathlib import Path
 
 # Load environment variables from .env file
 load_dotenv()
@@ -33,10 +33,11 @@ MAX_SHORT_TERM_MEMORY = int(os.getenv("MAX_SHORT_TERM_MEMORY", "10"))
 IDLE_THRESHOLD_SECONDS = int(os.getenv("IDLE_THRESHOLD_SECONDS", "300"))
 MIN_SPEECH_INTERVAL_SECONDS = int(os.getenv("MIN_SPEECH_INTERVAL_SECONDS", "15"))
 
+
 def get_config():
     """
     Return all configuration settings as a dictionary.
-    
+
     Returns:
         dict: All configuration settings
     """
@@ -60,5 +61,5 @@ def get_config():
             "max_short_term_memory": MAX_SHORT_TERM_MEMORY,
             "idle_threshold_seconds": IDLE_THRESHOLD_SECONDS,
             "min_speech_interval_seconds": MIN_SPEECH_INTERVAL_SECONDS,
-        }
+        },
     }

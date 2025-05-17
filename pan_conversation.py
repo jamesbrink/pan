@@ -6,23 +6,24 @@ It routes user input to appropriate response handlers, manages user recognition,
 and coordinates emotional responses based on conversation context.
 """
 
-import pan_research
 import pan_emotions
+import pan_research
 import pan_users
 from pan_speech import speak
+
 
 def respond(user_input, user_id):
     """
     Process user input and generate an appropriate response.
-    
+
     This is the main function for handling conversation flow. It routes user input
     to the appropriate handler based on content, manages user recognition,
     and coordinates with other modules to generate contextually relevant responses.
-    
+
     Args:
         user_input (str): The text input from the user
         user_id (str): Unique identifier for the current user
-        
+
     Returns:
         str: PAN's response to the user input
     """
@@ -75,14 +76,21 @@ def respond(user_input, user_id):
         return response
 
     # News archive request
-    if "news archive" in user_input_lower or "show me the news archive" in user_input_lower:
+    if (
+        "news archive" in user_input_lower
+        or "show me the news archive" in user_input_lower
+    ):
         response = pan_research.list_news_archive()
         speak(response, mood_override="calm")
         return response
 
     # Multi-step research queries
-    if user_input_lower.startswith("tell me about") or user_input_lower.startswith("explain"):
-        topic = user_input_lower.replace("tell me about", "").replace("explain", "").strip()
+    if user_input_lower.startswith("tell me about") or user_input_lower.startswith(
+        "explain"
+    ):
+        topic = (
+            user_input_lower.replace("tell me about", "").replace("explain", "").strip()
+        )
         response = pan_research.multi_step_research(topic, user_id)
         return response
 

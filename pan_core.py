@@ -7,14 +7,15 @@ by preparing the environment and dependencies before operation.
 """
 
 import sqlite3
+
 import pan_emotions
-import pan_speech
 from pan_config import DATABASE_PATH
+
 
 def initialize_database():
     """
     Initialize the SQLite database used by PAN for persistent storage.
-    
+
     Creates the database and necessary tables if they don't already exist.
     Tables include:
     - users: Store user information
@@ -22,47 +23,58 @@ def initialize_database():
     - opinions: Store PAN's opinions on various topics
     - affinity: Store relationship scores with different users
     - news_archive: Cache news information to avoid redundant notifications
-    
+
     Returns:
         None
     """
     with sqlite3.connect(DATABASE_PATH) as conn:
         cursor = conn.cursor()
         # Create tables if they don't exist
-        cursor.execute('''CREATE TABLE IF NOT EXISTS users (
+        cursor.execute(
+            """CREATE TABLE IF NOT EXISTS users (
             user_id TEXT PRIMARY KEY,
             name TEXT NOT NULL
-        )''')
-        cursor.execute('''CREATE TABLE IF NOT EXISTS memories (
+        )"""
+        )
+        cursor.execute(
+            """CREATE TABLE IF NOT EXISTS memories (
             id INTEGER PRIMARY KEY,
             category TEXT,
             content TEXT
-        )''')
-        cursor.execute('''CREATE TABLE IF NOT EXISTS opinions (
+        )"""
+        )
+        cursor.execute(
+            """CREATE TABLE IF NOT EXISTS opinions (
             id INTEGER PRIMARY KEY,
             topic TEXT,
             opinion TEXT,
             strength INTEGER
-        )''')
-        cursor.execute('''CREATE TABLE IF NOT EXISTS affinity (
+        )"""
+        )
+        cursor.execute(
+            """CREATE TABLE IF NOT EXISTS affinity (
             user_id TEXT PRIMARY KEY,
             score INTEGER
-        )''')
-        cursor.execute('''CREATE TABLE IF NOT EXISTS news_archive (
+        )"""
+        )
+        cursor.execute(
+            """CREATE TABLE IF NOT EXISTS news_archive (
             id INTEGER PRIMARY KEY,
             headline TEXT,
             date TEXT
-        )''')
+        )"""
+        )
         conn.commit()
+
 
 def initialize_pan():
     """
     Initialize all PAN systems and prepare for operation.
-    
+
     This function serves as the main entry point for starting up PAN.
     It initializes the database, sets the default emotional state,
     and prepares all necessary components for operation.
-    
+
     Returns:
         None
     """
