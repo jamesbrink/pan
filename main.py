@@ -56,29 +56,92 @@ def curiosity_loop():
 
         if idle_time >= IDLE_THRESHOLD_SECONDS:
             topic = random.choice(["space", "history", "technology", "science"])
+            assistant_name = pan_config.ASSISTANT_NAME
+            print(f"{assistant_name} is curious about {topic}...")
+            pan_speech.speak(
+                f"I'm curious about {topic}. Let me see what I can find.",
+                mood_override="curious",
+            )
+            
             response = pan_research.live_search(topic)
+            print(f"{assistant_name}'s curiosity: {response}")
             pan_speech.speak(f"I just learned something amazing about {topic}! {response}")
 
             last_speech_time = time.time()
             last_interaction_time = time.time()
 
 
-def listen_with_retries(max_attempts=3, timeout=5):
+def listen_with_retries(max_attempts=3, timeout=None):
+    """
+    Attempt to listen for user speech input with multiple retries on failure.
+
+    This function ensures that PAN waits for any text-to-speech to finish before
+    attempting to listen, and retries listening if no clear speech is detected.
+
+    Args:
+        max_attempts (int): Maximum number of listening attempts before giving up
+        timeout (int, optional): Maximum time in seconds to wait for speech input on each attempt
+                                If None, uses the configured default.
+
+    Returns:
+        str or None: Transcribed speech text if successful, None if all attempts fail
+
+    Raises:
+        KeyboardInterrupt: Re-raises keyboard interrupt to allow clean exit
+    """
     for attempt in range(max_attempts):
-        text = pan_speech.listen_to_user(timeout=timeout)
-        if text:
-            return text
-        else:
+        wait_start = time.time()
+        wait_timeout = 30  # seconds
+        last_log_time = 0
+
+        # Wait for TTS to finish speaking before listening
+        while pan_speech.speak_manager.speaking_event.is_set():
+            elapsed = time.time() - wait_start
+            if elapsed > wait_timeout:
+                print(
+                    f"Warning: Timeout waiting for TTS to finish ({elapsed:.1f}s), forcing listen."
+                )
+                break
+            if int(elapsed) % 5 == 0 and int(elapsed) != last_log_time:
+                print(
+                    f"Still waiting for TTS to finish after {int(elapsed)} seconds..."
+                )
+                last_log_time = int(elapsed)
+            time.sleep(0.1)
+
+        try:
+            # Use recalibration on first attempt for better accuracy
+            recalibrate = (attempt == 0)
+            text = pan_speech.listen_to_user(timeout=timeout, recalibrate=recalibrate)
+            if text:
+                return text
             print(f"Listen attempt {attempt + 1} failed, retrying...")
             time.sleep(1)
+        except KeyboardInterrupt:
+            # Re-raise the keyboard interrupt to ensure it's caught by the main try/except
+            print("\nKeyboard interrupt detected during listening...")
+            raise
+
+    print("Max listen attempts reached without success.")
     return None
 
 
 if __name__ == '__main__':
-    print("Pan is starting...")
+    assistant_name = pan_config.ASSISTANT_NAME
+    print(f"{assistant_name} is starting...")
     pan_core.initialize_pan()
-    greeting = get_time_based_greeting()
-    pan_speech.speak(f"{greeting} I'm Pan, ready to help you. How can I assist you today?")
+    
+    # Streamlined greeting with time-based introduction
+    hour = datetime.now().hour
+    time_greeting = "Good morning" if 5 <= hour < 12 else "Good afternoon" if 12 <= hour < 17 else "Good evening" if 17 <= hour < 22 else "Hello"
+    
+    # Full name explanation based on assistant name
+    name_explanation = "your Personal Assistant with Nuance" if assistant_name == "Pan" else ""
+    name_connector = ", " if name_explanation else ""
+    
+    pan_speech.speak(
+        f"{time_greeting}! I'm {assistant_name}{name_connector}{name_explanation}. I can help you search for information, check the weather, get news updates, or just chat. What can I do for you today?"
+    )
 
     curiosity_thread = threading.Thread(target=curiosity_loop, daemon=True)
     curiosity_thread.start()
@@ -99,7 +162,8 @@ if __name__ == '__main__':
             else:
                 response = pan_conversation.respond(user_input, user_id)
 
-            print(f"Pan: {response}")
+            assistant_name = pan_config.ASSISTANT_NAME
+            print(f"{assistant_name}: {response}")
             pan_speech.speak(response)
         else:
             print("No valid input detected, listening again...")
