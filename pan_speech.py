@@ -256,24 +256,36 @@ def listen_to_user(timeout=5):
         
     Returns:
         str or None: Transcribed speech text if successful, None if unsuccessful
+        
+    Raises:
+        KeyboardInterrupt: Propagates keyboard interrupt for proper handling
     """
     recognizer = sr.Recognizer()
     mic = sr.Microphone()
-    with mic as source:
-        print("Listening...")
-        recognizer.adjust_for_ambient_noise(source, duration=1.5)
-        try:
-            audio = recognizer.listen(source, timeout=timeout)
-        except sr.WaitTimeoutError:
-            print("Listening timed out while waiting for phrase to start")
-            return None
+    
     try:
-        text = recognizer.recognize_google(audio)
-        print(f"You said: {text}")
-        return text
-    except sr.UnknownValueError:
-        print("Sorry, I didn't catch that.")
-        return None
-    except sr.RequestError as e:
-        print(f"Could not request results; {e}")
-        return None
+        with mic as source:
+            print("Listening...")
+            recognizer.adjust_for_ambient_noise(source, duration=1.5)
+            try:
+                audio = recognizer.listen(source, timeout=timeout)
+            except sr.WaitTimeoutError:
+                print("Listening timed out while waiting for phrase to start")
+                return None
+            except KeyboardInterrupt:
+                # Re-raise for proper exit handling
+                raise
+                
+        try:
+            text = recognizer.recognize_google(audio)
+            print(f"You said: {text}")
+            return text
+        except sr.UnknownValueError:
+            print("Sorry, I didn't catch that.")
+            return None
+        except sr.RequestError as e:
+            print(f"Could not request results; {e}")
+            return None
+    except KeyboardInterrupt:
+        # Re-raise for proper exit handling
+        raise
