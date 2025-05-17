@@ -13,16 +13,20 @@ import pan_settings
 import pan_speech
 import pan_ai
 import pan_research
+import pan_config  # Centralized Configuration
 import threading
 import time
 import random
 from datetime import datetime
 
+# Load configuration
+config = pan_config.get_config()
+
 # Global variables for tracking state
 curiosity_active = True
 last_interaction_time = time.time()
 last_speech_time = 0
-MIN_SPEECH_INTERVAL = 15  # seconds
+MIN_SPEECH_INTERVAL = config["conversation"]["min_speech_interval_seconds"]
 
 def get_time_based_greeting():
     hour = datetime.now().hour
@@ -37,7 +41,7 @@ def get_time_based_greeting():
 
 def curiosity_loop():
     global last_interaction_time, last_speech_time
-    idle_threshold = 5 * 60  # 5 minutes idle before curiosity triggers
+    idle_threshold = config["conversation"]["idle_threshold_seconds"]
 
     while curiosity_active:
         time.sleep(10)
@@ -46,7 +50,6 @@ def curiosity_loop():
             topic = random.choice(["space", "history", "technology", "science"])
             response = pan_research.live_search(topic)
             pan_speech.speak(f"I just learned something amazing about {topic}! {response}")
-
             last_speech_time = time.time()
             last_interaction_time = time.time()
 
@@ -84,7 +87,9 @@ if __name__ == '__main__':
                 search_query = user_input[10:].strip()
                 response = pan_research.live_search(search_query)
             elif user_input_lower.startswith("weather"):
-                response = pan_research.get_weather()
+                city = config["location"]["city"]
+                country = config["location"]["country_code"]
+                response = pan_research.get_weather(city=city, country_code=country)
             elif user_input_lower.startswith("news"):
                 response = pan_research.get_local_news()
             else:

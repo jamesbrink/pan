@@ -1,108 +1,115 @@
 """
-Conversation Engine for PAN
+PAN - Personal Assistant with Nuance
 
-This module handles the main conversation flow and user interaction logic.
-It routes user input to appropriate response handlers, manages user recognition,
-and coordinates emotional responses based on conversation context.
+Main entry point for the PAN digital assistant. Handles initialization, 
+user interaction, command processing, and manages the autonomous curiosity system.
 """
 
-import pan_research
+import pan_core
+import pan_conversation
 import pan_emotions
-import pan_users
-from pan_speech import speak
+import pan_memory
+import pan_settings
+import pan_speech
+import pan_ai
+import pan_research
+import pan_config  # Centralized Configuration
+import threading
+import time
+import random
+from datetime import datetime
 
-def respond(user_input, user_id):
-    """
-    Process user input and generate an appropriate response.
-    
-    This is the main function for handling conversation flow. It routes user input
-    to the appropriate handler based on content, manages user recognition,
-    and coordinates with other modules to generate contextually relevant responses.
-    
-    Args:
-        user_input (str): The text input from the user
-        user_id (str): Unique identifier for the current user
-        
-    Returns:
-        str: PAN's response to the user input
-    """
-    # Check if user is known
-    name = pan_users.get_user_name(user_id)
+# Global variables for tracking state
+curiosity_active = True
+last_interaction_time = time.time()
+last_speech_time = 0
 
-    # User recognition for first-time users
-    if not name:
-        speak("I don't believe we've met. What's your name?", mood_override="curious")
-        # For demo, prompt for name input; replace with voice recognition in production
-        name = input("Please enter your name: ").strip()
-        pan_users.add_user(user_id, name)
-        speak(f"Nice to meet you, {name}!", mood_override="happy")
+# Load Configuration Settings
+def load_config():
+    config = pan_config.get_config()
+    global MAX_SHORT_TERM_MEMORY, IDLE_THRESHOLD_SECONDS, MIN_SPEECH_INTERVAL_SECONDS
+    MAX_SHORT_TERM_MEMORY = config["conversation"]["max_short_term_memory"]
+    IDLE_THRESHOLD_SECONDS = config["conversation"]["idle_threshold_seconds"]
+    MIN_SPEECH_INTERVAL_SECONDS = config["conversation"]["min_speech_interval_seconds"]
 
-    # Handle empty or None input
-    if user_input is None or user_input.strip() == "":
-        response = "I didn't catch that. Could you please repeat?"
-        speak(response, mood_override="sad")
-        return response
+load_config()
 
-    user_input_lower = user_input.lower()
 
-    # Greeting detection
-    if any(greet in user_input_lower for greet in ["hello", "hi", "hey", "greetings"]):
-        response = f"Hello, {name}! How can I assist you today?"
-        speak(response, mood_override="happy")
-        return response
+def get_time_based_greeting():
+    hour = datetime.now().hour
+    if 5 <= hour < 12:
+        return "Good morning!"
+    elif 12 <= hour < 17:
+        return "Good afternoon!"
+    elif 17 <= hour < 22:
+        return "Good evening!"
+    else:
+        return "Hello!"
 
-    # Asking about Pan's mood or feelings
-    if "how are you" in user_input_lower or "how do you feel" in user_input_lower:
-        mood_response = pan_emotions.pan_emotions.express_feelings()
-        speak(mood_response)
-        return mood_response
 
-    # Asking Pan's opinions
-    if "your opinions" in user_input_lower or "what do you think" in user_input_lower:
-        opinions = pan_research.list_opinions(user_id, share=True)
-        return opinions
+def curiosity_loop():
+    global last_interaction_time, last_speech_time
 
-    # Weather queries
-    if "weather" in user_input_lower:
-        response = pan_research.get_weather()
-        speak(response, mood_override="excited")
-        return response
+    while curiosity_active:
+        time.sleep(10)
+        idle_time = time.time() - last_interaction_time
 
-    # Local news queries
-    if "news" in user_input_lower:
-        response = pan_research.get_local_news()
-        speak(response, mood_override="excited")
-        return response
+        if idle_time >= IDLE_THRESHOLD_SECONDS:
+            topic = random.choice(["space", "history", "technology", "science"])
+            response = pan_research.live_search(topic)
+            pan_speech.speak(f"I just learned something amazing about {topic}! {response}")
 
-    # News archive request
-    if "news archive" in user_input_lower or "show me the news archive" in user_input_lower:
-        response = pan_research.list_news_archive()
-        speak(response, mood_override="calm")
-        return response
+            last_speech_time = time.time()
+            last_interaction_time = time.time()
 
-    # Multi-step research queries
-    if user_input_lower.startswith("tell me about") or user_input_lower.startswith("explain"):
-        topic = user_input_lower.replace("tell me about", "").replace("explain", "").strip()
-        response = pan_research.multi_step_research(topic, user_id)
-        return response
 
-    # Comfort user if sad or favorite
-    if "i'm sad" in user_input_lower or "i feel down" in user_input_lower:
-        pan_research.comfort_user(user_id)
-        return "I'm here for you. You're not alone."
+def listen_with_retries(max_attempts=3, timeout=5):
+    for attempt in range(max_attempts):
+        text = pan_speech.listen_to_user(timeout=timeout)
+        if text:
+            return text
+        else:
+            print(f"Listen attempt {attempt + 1} failed, retrying...")
+            time.sleep(1)
+    return None
 
-    # Warn user if low affinity
-    warning = pan_research.warn_low_affinity(user_id)
-    if warning:
-        return warning
 
-    # Direct search queries
-    if user_input_lower.startswith("search for") or "what is" in user_input_lower or "who is" in user_input_lower:
-        query = user_input_lower.replace("search for", "").replace("what is", "").replace("who is", "").strip()
-        response = pan_research.live_search(query)
-        speak(response, mood_override="curious")
-        return response
+if __name__ == '__main__':
+    print("Pan is starting...")
+    pan_core.initialize_pan()
+    greeting = get_time_based_greeting()
+    pan_speech.speak(f"{greeting} I'm Pan, ready to help you. How can I assist you today?")
 
-    # Generic fallback - delegate to research module
-    response = pan_research.live_search(user_input)
-    return response
+    curiosity_thread = threading.Thread(target=curiosity_loop, daemon=True)
+    curiosity_thread.start()
+
+    user_id = "default_user"
+
+    while True:
+        user_input = listen_with_retries()
+        if user_input:
+            user_input_lower = user_input.lower()
+
+            if "exit program" in user_input_lower:
+                pan_speech.speak("Goodbye! Shutting down now.")
+                curiosity_active = False
+                curiosity_thread.join(timeout=5)
+                break
+
+            elif user_input_lower.startswith("search for"):
+                search_query = user_input[10:].strip()
+                response = pan_research.live_search(search_query)
+
+            elif user_input_lower.startswith("weather"):
+                response = pan_research.get_weather()
+
+            elif user_input_lower.startswith("news"):
+                response = pan_research.get_local_news()
+
+            else:
+                response = pan_conversation.respond(user_input, user_id)
+
+            print(f"Pan: {response}")
+            pan_speech.speak(response)
+        else:
+            print("No valid input detected, listening again...")
