@@ -1,0 +1,128 @@
+[MASTER]
+# Add files or directories to the blacklist
+ignore=CVS,.git,node_modules,venv,.venv
+
+# Use multiple processes to speed up Pylint
+jobs=4
+
+# Control the amount of potential inferred values when inferring a single object
+limit-inference-results=100
+
+# List of plugins
+load-plugins=
+
+# Pickle collected data for later comparisons
+persistent=yes
+
+# When enabled, pylint would attempt to guess common misconfiguration and emit
+# user-friendly hints instead of false-positive error messages
+suggestion-mode=yes
+
+# Allow loading of arbitrary C extensions
+unsafe-load-any-extension=no
+
+[MESSAGES CONTROL]
+# Disable the message, report, category or checker with the given id(s)
+disable=
+    missing-module-docstring,
+    missing-class-docstring,
+    missing-function-docstring,
+    line-too-long,
+    invalid-name,
+    no-member,
+    fixme,
+    too-many-instance-attributes,
+    too-many-arguments,
+    too-many-branches,
+    too-many-locals,
+    too-many-statements,
+    too-few-public-methods,
+    too-many-public-methods,
+    protected-access,
+    import-outside-toplevel
+
+[REPORTS]
+# Output format (text, parseable, colorized, json, msvs)
+output-format=colorized
+
+# Tells whether to display a full report or only the messages
+reports=no
+
+# Activate the evaluation score
+score=yes
+
+[REFACTORING]
+# Maximum number of nested blocks for function / method body
+max-nested-blocks=5
+
+[SIMILARITIES]
+# Ignore comments when computing similarities
+ignore-comments=yes
+
+# Ignore docstrings when computing similarities
+ignore-docstrings=yes
+
+# Ignore imports when computing similarities
+ignore-imports=yes
+
+# Minimum lines number of a similarity
+min-similarity-lines=4
+
+[BASIC]
+# Good variable names which should always be accepted
+good-names=i,j,k,ex,Run,_,id,db
+
+# Bad variable names which should always be refused
+bad-names=foo,bar,baz,toto,tutu,tata
+
+# Regular expression which should only match function or class names that do
+# not require a docstring.
+no-docstring-rgx=^_
+
+[VARIABLES]
+# List of additional names supposed to be defined in builtins
+additional-builtins=
+
+# Tells whether we should check for unused import in __init__ files
+init-import=no
+
+[FORMAT]
+# Expected format of line ending, e.g. empty (any line ending), LF or CRLF
+expected-line-ending-format=LF
+
+# Regexp for a line that is allowed to be longer than the limit
+ignore-long-lines=^\s*(# )?<?https?://\S+>?$
+
+# Maximum number of characters on a single line
+max-line-length=100
+
+[DESIGN]
+# Maximum number of arguments for function / method
+max-args=10
+
+# Maximum number of attributes for a class
+max-attributes=15
+
+# Maximum number of boolean expressions in an if statement
+max-bool-expr=5
+
+# Maximum number of branch for function / method body
+max-branches=12
+
+# Maximum number of locals for function / method body
+max-locals=15
+
+# Maximum number of parents for a class
+max-parents=7
+
+# Maximum number of public methods for a class
+max-public-methods=20
+
+# Maximum number of return / yield for function / method body
+max-returns=6
+
+# Maximum number of statements in function / method body
+max-statements=50
+
+# Minimum number of public methods for a class
+min-public-methods=0
