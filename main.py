@@ -108,7 +108,7 @@ if __name__ == '__main__':
 
             elif user_input_lower.startswith("search for"):
                 search_query = user_input[10:].strip()
-                response = pan_research.live_search(search_query, user_id)
+                response = pan_research.live_search(search_query)
 
             elif user_input_lower.startswith("weather"):
                 response = pan_research.get_weather()
@@ -140,10 +140,6 @@ if __name__ == '__main__':
 
             else:
                 response = pan_conversation.respond(user_input, user_id)
-
-            user_affinity = pan_research.get_affinity(user_id)
-            if user_affinity < 0:
-                response = response.replace("I think", "Whatever, I guess").replace("I hope", "I don't care if")
 
             print(f"Pan: {response}")
             pan_speech.speak(response)
