@@ -21,6 +21,8 @@ PAN is a personality-based voice recognition digital assistant that combines emo
 
 ### Installation
 
+#### Using Nix (Recommended)
+
 1. Clone this repository:
    ```bash
    git clone https://github.com/yourusername/pan.git
@@ -29,7 +31,7 @@ PAN is a personality-based voice recognition digital assistant that combines emo
 
 2. Create a configuration file:
    ```bash
-   touch .env
+   cp .env.example .env
    ```
    Edit the `.env` file and add your API keys (see API Keys section below).
 
@@ -41,9 +43,51 @@ PAN is a personality-based voice recognition digital assistant that combines emo
 4. Initialize the database:
    ```bash
    python init_db.py
+   # or
+   make init
    ```
 
 5. Run the application:
+   ```bash
+   python main.py
+   ```
+
+#### Without Nix
+
+1. Clone this repository:
+   ```bash
+   git clone https://github.com/yourusername/pan.git
+   cd pan
+   ```
+
+2. Create a virtual environment:
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```
+
+3. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+4. Install system dependencies:
+   - **macOS**: `brew install portaudio ffmpeg espeak`
+   - **Linux**: `sudo apt-get install portaudio19-dev python3-pyaudio ffmpeg espeak`
+   - **Windows**: Install PyAudio from a wheel file if pip install fails
+
+5. Create a configuration file:
+   ```bash
+   cp .env.example .env
+   ```
+   Edit the `.env` file with your API keys.
+
+6. Initialize the database:
+   ```bash
+   python init_db.py
+   ```
+
+7. Run the application:
    ```bash
    python main.py
    ```
@@ -64,10 +108,25 @@ PAN requires the following API keys to access external services:
 
 Example `.env` file:
 ```
+# Database settings
+DATABASE_PATH=pan_memory.db
+
+# API keys
 WEATHER_API_KEY=abc123yourapikeyhere
 NEWS_API_KEY=xyz789yourapikeyhere
+
+# Location settings
 DEFAULT_CITY=Kelso
 DEFAULT_COUNTRY_CODE=US
+
+# Voice settings
+DEFAULT_VOICE_RATE=160
+DEFAULT_VOICE_VOLUME=0.9
+
+# Conversation settings
+MAX_SHORT_TERM_MEMORY=10
+IDLE_THRESHOLD_SECONDS=300
+MIN_SPEECH_INTERVAL_SECONDS=15
 ```
 
 ## Development Tasks
@@ -127,28 +186,92 @@ The pre-commit hooks will automatically run:
 - YAML syntax check
 - Check for large files
 
-### Voice Commands
+## Usage Guide
 
-PAN understands various commands, including:
+PAN is designed to be interacted with through voice commands. When you run the application, it will greet you and listen for your commands. Press CTRL+C at any time to exit gracefully.
 
-- "Search for [topic]" - Performs a web search
-- "Weather" - Gets current weather information
-- "News" - Retrieves recent news headlines
-- "Share your thoughts" - PAN shares opinions on topics it knows about
-- "Adjust your opinion on [topic] to [new thought]" - Changes PAN's opinion
-- "Exit program" - Shuts down the application
+### Basic Interactions
+
+- **Greetings**: "Hello", "Hi", "Hey", "Greetings"
+  - *PAN responds with a greeting and asks how it can help*
+  
+- **Well-being**: "How are you?", "How do you feel?"
+  - *PAN shares its current emotional state*
+  
+- **Exit**: "Exit program"
+  - *PAN will say goodbye and shut down*
+
+### Information Requests
+
+- **General Information**: "Tell me about [topic]", "Explain [topic]"
+  - *Example: "Tell me about climate change"*
+  - *PAN researches the topic and provides information*
+
+- **Weather**: "Weather", "What's the weather like?"
+  - *PAN reports current weather conditions for your configured location*
+  
+- **News**: "News", "What's happening today?"
+  - *PAN shares recent news headlines*
+  
+- **News Archive**: "News archive", "Show me the news archive"
+  - *PAN retrieves previously stored news*
+  
+- **Web Search**: "Search for [query]"
+  - *Example: "Search for best pizza recipes"*
+  - *PAN performs a web search and summarizes results*
+
+### Opinion & Personality Features
+
+- **Get Opinions**: "Your opinions", "What do you think?", "Share your thoughts"
+  - *PAN shares opinions it has formed on various topics*
+  
+- **Change Opinion**: "Adjust your opinion on [topic] to [new thought]"
+  - *Example: "Adjust your opinion on coffee to I think it's the best morning beverage"*
+  - *PAN will update its opinion database*
+
+### Entertainment
+
+- **Jokes**: "Tell me a joke", "Joke"
+  - *PAN shares a random joke from its collection*
+
+### Emotional Support
+
+- **Comfort**: "I'm sad", "I feel down"
+  - *PAN offers comforting responses*
+
+### Autonomous Behavior
+
+When idle for a period of time (configurable via `IDLE_THRESHOLD_SECONDS` in your .env file), PAN will autonomously:
+
+1. Research a random topic from its interests
+2. Share what it learned with you
+3. Store the information in its memory
+
+You can interrupt this behavior at any time by speaking to PAN.
 
 ## Architecture
 
 PAN is built with a modular architecture:
 
-- **Core System**: Initialization and main loop
-- **Conversation Engine**: User input processing
-- **Emotional System**: Mood and tone management
-- **Memory System**: Information persistence
-- **Speech Interface**: Voice I/O
-- **Research Capabilities**: Web search and API integration
-- **User Management**: User profiles and preferences
+- **Core System** (`pan_core.py`, `main.py`): Initialization and main conversation loop
+- **Conversation Engine** (`pan_conversation.py`): User input processing and contextual responses
+- **Emotional System** (`pan_emotions.py`): Mood states management and response tone adjustment
+- **Memory System** (`pan_memory.py`): Information persistence in SQLite database
+- **Speech Interface** (`pan_speech.py`): Text-to-speech with emotion modulation and speech recognition
+- **Research Capabilities** (`pan_research.py`): Web search, weather/news APIs, opinion management
+- **User Management** (`pan_users.py`): User identification and preference tracking
+- **AI Response** (`pan_ai.py`): Natural language generation and response formatting
+- **Configuration** (`pan_config.py`): Centralized environment variable management
+
+### Platform-Specific Considerations
+
+PAN has been optimized to work across different platforms:
+
+- **Windows**: Uses SAPI for improved text-to-speech when available
+- **macOS**: Uses macOS native speech capabilities via PyObjC
+- **Linux**: Uses espeak or other available TTS engines
+
+The system features graceful degradation of speech capabilities, falling back to simpler engines when primary ones are unavailable.
 
 ## License
 
