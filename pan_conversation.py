@@ -74,6 +74,13 @@ def respond(user_input, user_id):
     if warning:
         return warning
 
-    # Fallback - delegate to research module
-    response = pan_research.live_search(user_input, user_id)
+    # Direct search queries
+    if user_input_lower.startswith("search for") or "what is" in user_input_lower or "who is" in user_input_lower:
+        query = user_input_lower.replace("search for", "").replace("what is", "").replace("who is", "").strip()
+        response = pan_research.live_search(query)
+        speak(response, mood_override="curious")
+        return response
+
+    # Generic fallback - delegate to research module
+    response = pan_research.live_search(user_input)
     return response
