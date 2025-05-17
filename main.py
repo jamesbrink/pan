@@ -125,79 +125,94 @@ if __name__ == '__main__':
     Initializes PAN, starts the curiosity background thread, and enters the main
     conversation loop that processes user input and generates responses.
     """
-    print("Pan is starting...")
-    pan_core.initialize_pan()
+    try:
+        print("Pan is starting...")
+        pan_core.initialize_pan()
 
-    greeting = get_time_based_greeting()
-    pan_speech.speak(f"{greeting} I'm Pan, ready to help you. How can I assist you today?")
+        greeting = get_time_based_greeting()
+        pan_speech.speak(f"{greeting} I'm Pan, ready to help you. How can I assist you today?")
 
-    # Start background thread for autonomous curiosity
-    curiosity_thread = threading.Thread(target=curiosity_loop, daemon=True)
-    curiosity_thread.start()
+        # Start background thread for autonomous curiosity
+        curiosity_thread = threading.Thread(target=curiosity_loop, daemon=True)
+        curiosity_thread.start()
 
-    user_id = "default_user"  # Replace with real user ID if available
+        user_id = "default_user"  # Replace with real user ID if available
 
-    # Main conversation loop
-    while True:
-        user_input = listen_with_retries()
-        if user_input:
-            print(f"User: {user_input}")
-            last_interaction_time = time.time()
+        # Main conversation loop
+        while True:
+            try:
+                user_input = listen_with_retries()
+                if user_input:
+                    print(f"User: {user_input}")
+                    last_interaction_time = time.time()
 
-            user_input_lower = user_input.lower()
+                    user_input_lower = user_input.lower()
 
-            # Command processing
-            if "exit program" in user_input_lower:
-                pan_speech.speak("Goodbye! Shutting down now.")
-                print("Exiting program on user request.")
-                curiosity_active = False
-                curiosity_thread.join(timeout=5)
-                break
+                    # Command processing
+                    if "exit program" in user_input_lower:
+                        pan_speech.speak("Goodbye! Shutting down now.")
+                        print("Exiting program on user request.")
+                        curiosity_active = False
+                        curiosity_thread.join(timeout=5)
+                        break
 
-            elif user_input_lower.startswith("search for"):
-                search_query = user_input[10:].strip()
-                response = pan_research.live_search(search_query, user_id)
+                    elif user_input_lower.startswith("search for"):
+                        search_query = user_input[10:].strip()
+                        response = pan_research.live_search(search_query, user_id)
 
-            elif user_input_lower.startswith("weather"):
-                response = pan_research.get_weather()
+                    elif user_input_lower.startswith("weather"):
+                        response = pan_research.get_weather()
 
-            elif user_input_lower.startswith("news"):
-                response = pan_research.get_local_news()
+                    elif user_input_lower.startswith("news"):
+                        response = pan_research.get_local_news()
 
-            elif user_input_lower.startswith("share your thoughts"):
-                response = pan_research.list_opinions(user_id, share=True)
+                    elif user_input_lower.startswith("share your thoughts"):
+                        response = pan_research.list_opinions(user_id, share=True)
 
-            elif user_input_lower.startswith("adjust your opinion on"):
-                parts = user_input.split(" to ")
-                if len(parts) == 2:
-                    topic = parts[0].replace("adjust your opinion on", "").strip()
-                    new_thought = parts[1].strip()
-                    pan_research.adjust_opinion(topic, new_thought)
-                    response = f"Got it. I've adjusted my thoughts on {topic}."
+                    elif user_input_lower.startswith("adjust your opinion on"):
+                        parts = user_input.split(" to ")
+                        if len(parts) == 2:
+                            topic = parts[0].replace("adjust your opinion on", "").strip()
+                            new_thought = parts[1].strip()
+                            pan_research.adjust_opinion(topic, new_thought)
+                            response = f"Got it. I've adjusted my thoughts on {topic}."
+                        else:
+                            response = "Please use the format: Adjust your opinion on [topic] to [new thought]."
+
+                    elif "joke" in user_input_lower:
+                        jokes = [
+                            "Why don't scientists trust atoms? Because they make up everything!",
+                            "Why did the scarecrow win an award? Because he was outstanding in his field!",
+                            "Why did the bicycle fall over? Because it was two-tired!",
+                            "Why do programmers prefer dark mode? Because light attracts bugs!"
+                        ]
+                        response = random.choice(jokes)
+
+                    else:
+                        # General conversation handling
+                        response = pan_conversation.respond(user_input, user_id)
+
+                    # Adjust response based on user affinity level
+                    user_affinity = pan_research.get_affinity(user_id)
+                    if user_affinity < 0:
+                        response = response.replace("I think", "Whatever, I guess").replace("I hope", "I don't care if")
+
+                    print(f"Pan: {response}")
+                    pan_speech.speak(response)
+
+                    time.sleep(0.3)  # pause to avoid Pan hearing itself
                 else:
-                    response = "Please use the format: Adjust your opinion on [topic] to [new thought]."
-
-            elif "joke" in user_input_lower:
-                jokes = [
-                    "Why don't scientists trust atoms? Because they make up everything!",
-                    "Why did the scarecrow win an award? Because he was outstanding in his field!",
-                    "Why did the bicycle fall over? Because it was two-tired!",
-                    "Why do programmers prefer dark mode? Because light attracts bugs!"
-                ]
-                response = random.choice(jokes)
-
-            else:
-                # General conversation handling
-                response = pan_conversation.respond(user_input, user_id)
-
-            # Adjust response based on user affinity level
-            user_affinity = pan_research.get_affinity(user_id)
-            if user_affinity < 0:
-                response = response.replace("I think", "Whatever, I guess").replace("I hope", "I don't care if")
-
-            print(f"Pan: {response}")
-            pan_speech.speak(response)
-
-            time.sleep(0.3)  # pause to avoid Pan hearing itself
-        else:
-            print("No valid input detected, listening again...")
+                    print("No valid input detected, listening again...")
+                    
+            except KeyboardInterrupt:
+                # Handle CTRL+C during conversation loop
+                continue
+                
+    except KeyboardInterrupt:
+        # Handle CTRL+C for graceful shutdown
+        print("\nShutting down gracefully...")
+        curiosity_active = False
+        if 'curiosity_thread' in locals():
+            curiosity_thread.join(timeout=5)
+        print("Pan has been shut down. Goodbye!")
+        exit(0)
