@@ -1,3 +1,10 @@
+"""
+PAN - Personal Assistant with Nuance
+
+Main entry point for the PAN digital assistant. Handles initialization, 
+user interaction, command processing, and manages the autonomous curiosity system.
+"""
+
 import pan_core
 import pan_conversation
 import pan_emotions
@@ -6,17 +13,25 @@ import pan_settings
 import pan_speech
 import pan_ai
 import pan_research
+import pan_config
 import threading
 import time
 import random
 from datetime import datetime
 
+# Global variables for tracking state
 curiosity_active = True
 last_interaction_time = time.time()
 last_speech_time = 0
-MIN_SPEECH_INTERVAL = 15  # seconds between speeches
+MIN_SPEECH_INTERVAL = pan_config.MIN_SPEECH_INTERVAL_SECONDS
 
 def get_time_based_greeting():
+    """
+    Generate a time-appropriate greeting based on the current hour.
+    
+    Returns:
+        str: A greeting appropriate for the current time of day
+    """
     hour = datetime.now().hour
     if 5 <= hour < 12:
         return "Good morning!"
@@ -28,8 +43,19 @@ def get_time_based_greeting():
         return "Hello!"
 
 def curiosity_loop():
+    """
+    Background thread function that manages PAN's autonomous research behavior.
+    
+    When PAN is idle for a specified time, it will autonomously research random topics
+    and share what it learns. This creates a more lifelike, curious personality.
+    
+    Global variables:
+        last_interaction_time: Time of the most recent user interaction
+        last_speech_time: Time of the most recent speech output
+        curiosity_active: Controls whether this loop continues running
+    """
     global last_interaction_time, last_speech_time
-    idle_threshold = 5 * 60  # 5 minutes idle before curiosity triggers
+    idle_threshold = pan_config.IDLE_THRESHOLD_SECONDS
 
     while curiosity_active:
         time.sleep(10)  # Check every 10 seconds
@@ -54,6 +80,19 @@ def curiosity_loop():
                 print("Skipping curiosity speech to avoid overlap")
 
 def listen_with_retries(max_attempts=3, timeout=5):
+    """
+    Attempt to listen for user speech input with multiple retries on failure.
+    
+    This function ensures that PAN waits for any text-to-speech to finish before 
+    attempting to listen, and retries listening if no clear speech is detected.
+    
+    Args:
+        max_attempts (int): Maximum number of listening attempts before giving up
+        timeout (int): Maximum time in seconds to wait for speech input on each attempt
+        
+    Returns:
+        str or None: Transcribed speech text if successful, None if all attempts fail
+    """
     for attempt in range(max_attempts):
         wait_start = time.time()
         wait_timeout = 30  # seconds
@@ -80,17 +119,25 @@ def listen_with_retries(max_attempts=3, timeout=5):
     return None
 
 if __name__ == '__main__':
+    """
+    Main application entry point.
+    
+    Initializes PAN, starts the curiosity background thread, and enters the main
+    conversation loop that processes user input and generates responses.
+    """
     print("Pan is starting...")
     pan_core.initialize_pan()
 
     greeting = get_time_based_greeting()
     pan_speech.speak(f"{greeting} I'm Pan, ready to help you. How can I assist you today?")
 
+    # Start background thread for autonomous curiosity
     curiosity_thread = threading.Thread(target=curiosity_loop, daemon=True)
     curiosity_thread.start()
 
     user_id = "default_user"  # Replace with real user ID if available
 
+    # Main conversation loop
     while True:
         user_input = listen_with_retries()
         if user_input:
@@ -99,6 +146,7 @@ if __name__ == '__main__':
 
             user_input_lower = user_input.lower()
 
+            # Command processing
             if "exit program" in user_input_lower:
                 pan_speech.speak("Goodbye! Shutting down now.")
                 print("Exiting program on user request.")
@@ -139,8 +187,10 @@ if __name__ == '__main__':
                 response = random.choice(jokes)
 
             else:
+                # General conversation handling
                 response = pan_conversation.respond(user_input, user_id)
 
+            # Adjust response based on user affinity level
             user_affinity = pan_research.get_affinity(user_id)
             if user_affinity < 0:
                 response = response.replace("I think", "Whatever, I guess").replace("I hope", "I don't care if")
