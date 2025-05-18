@@ -33,13 +33,16 @@ jobs:
           echo 'allow-import-from-derivation = false' >> ~/.config/nix/nix.conf
           echo 'eval-cache = false' >> ~/.config/nix/nix.conf
           echo 'warn-dirty = false' >> ~/.config/nix/nix.conf
+          echo 'accept-flake-config = true' >> ~/.config/nix/nix.conf
           # Disable binary cache to avoid HTTP 418 errors
           echo 'substitute = false' >> ~/.config/nix/nix.conf
           
       - name: Run linting
-        run: nix --quiet develop -c make lint
-        env:
-          NIX_CONFIG: "extra-experimental-features = nix-command flakes"
+        # Handle the stderr redirection to /dev/null to filter out stdenv.tests warnings
+        # while still allowing actual errors to fail the build
+        run: |
+          nix --log-format raw develop 2> >(grep -v "stdenv.tests" >&2) -c make lint || exit $?
+        shell: bash
 
   typecheck:
     runs-on: ubuntu-latest
@@ -67,13 +70,16 @@ jobs:
           echo 'allow-import-from-derivation = false' >> ~/.config/nix/nix.conf
           echo 'eval-cache = false' >> ~/.config/nix/nix.conf
           echo 'warn-dirty = false' >> ~/.config/nix/nix.conf
+          echo 'accept-flake-config = true' >> ~/.config/nix/nix.conf
           # Disable binary cache to avoid HTTP 418 errors
           echo 'substitute = false' >> ~/.config/nix/nix.conf
           
       - name: Run type checking
-        run: nix --quiet develop -c make type
-        env:
-          NIX_CONFIG: "extra-experimental-features = nix-command flakes"
+        # Handle the stderr redirection to /dev/null to filter out stdenv.tests warnings
+        # while still allowing actual errors to fail the build
+        run: |
+          nix --log-format raw develop 2> >(grep -v "stdenv.tests" >&2) -c make type || exit $?
+        shell: bash
 
   test:
     runs-on: ubuntu-latest
@@ -101,10 +107,13 @@ jobs:
           echo 'allow-import-from-derivation = false' >> ~/.config/nix/nix.conf
           echo 'eval-cache = false' >> ~/.config/nix/nix.conf
           echo 'warn-dirty = false' >> ~/.config/nix/nix.conf
+          echo 'accept-flake-config = true' >> ~/.config/nix/nix.conf
           # Disable binary cache to avoid HTTP 418 errors
           echo 'substitute = false' >> ~/.config/nix/nix.conf
           
       - name: Run tests
-        run: nix --quiet develop -c make test
-        env:
-          NIX_CONFIG: "extra-experimental-features = nix-command flakes"
+        # Handle the stderr redirection to /dev/null to filter out stdenv.tests warnings
+        # while still allowing actual errors to fail the build
+        run: |
+          nix --log-format raw develop 2> >(grep -v "stdenv.tests" >&2) -c make test || exit $?
+        shell: bash
