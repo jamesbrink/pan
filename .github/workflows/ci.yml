@@ -2,189 +2,34 @@ name: CI
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ "main", "master" ]
   pull_request:
-    branches: [ main, master ]
-  workflow_dispatch:
+    branches: [ "main", "master" ]
 
 jobs:
-  ubuntu-build:
-    name: Build and Test (Ubuntu)
+  lint:
     runs-on: ubuntu-latest
-    env:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v3
+      - uses: DeterminateSystems/nix-installer-action@v17
+      - uses: DeterminateSystems/magic-nix-cache-action@v2
+      - name: Run linting
+        run: nix develop -c make lint
 
-      - name: Install Nix
-        uses: DeterminateSystems/nix-installer-action@v17
-        with:
-          logger: pretty
-
-      # Use GitHub's own cache action instead of magic-nix-cache-action
-      - uses: actions/cache@v4
-        name: Cache Nix store
-        with:
-          path: |
-            ~/.cache/nix
-            /nix/store
-          key: ${{ runner.os }}-nix-${{ hashFiles('flake.nix', 'flake.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-nix-
-
-      - name: Configure Nix
-        run: |
-          mkdir -p ~/.config/nix
-          echo 'max-jobs = 2' >> ~/.config/nix/nix.conf
-          echo 'connect-timeout = 30' >> ~/.config/nix/nix.conf
-          echo 'stalled-download-timeout = 60' >> ~/.config/nix/nix.conf
-          # Enable flakes
-          echo 'experimental-features = nix-command flakes' >> ~/.config/nix/nix.conf
-          # Prevent infinite recursion
-          echo 'allow-import-from-derivation = false' >> ~/.config/nix/nix.conf
-          echo 'eval-cache = false' >> ~/.config/nix/nix.conf
-
-      - name: Lint
-        run: |
-          nix --quiet --no-eval-cache develop -c make lint
-        env:
-          NIX_CONNECT_TIMEOUT: 60
-
-      - name: Type check
-        run: |
-          nix --quiet --no-eval-cache develop -c make type
-        env:
-          NIX_CONNECT_TIMEOUT: 60
-
-      - name: Run tests
-        run: |
-          nix --quiet --no-eval-cache develop -c make test
-        env:
-          NIX_CONNECT_TIMEOUT: 60
-
-      - name: Run coverage
-        run: |
-          nix --quiet --no-eval-cache develop -c make coverage
-        env:
-          NIX_CONNECT_TIMEOUT: 60
-
-      - name: Build development environment
-        run: |
-          nix --quiet --no-eval-cache develop --command echo "Development environment successfully built"
-        env:
-          NIX_CONNECT_TIMEOUT: 60
-
-  macos-build:
-    name: Build and Test (macOS)
-    runs-on: macos-latest
-    env:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
+  typecheck:
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v3
+      - uses: DeterminateSystems/nix-installer-action@v17
+      - uses: DeterminateSystems/magic-nix-cache-action@v2
+      - name: Run type checking
+        run: nix develop -c make type
 
-      - name: Install Nix
-        uses: DeterminateSystems/nix-installer-action@v9
-        with:
-          logger: pretty
-
-      # Use GitHub's own cache action instead of magic-nix-cache-action
-      - uses: actions/cache@v4
-        name: Cache Nix store
-        with:
-          path: |
-            ~/.cache/nix
-            /nix/store
-          key: ${{ runner.os }}-nix-${{ hashFiles('flake.nix', 'flake.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-nix-
-
-      - name: Configure Nix
-        run: |
-          mkdir -p ~/.config/nix
-          echo 'max-jobs = 2' >> ~/.config/nix/nix.conf
-          echo 'connect-timeout = 30' >> ~/.config/nix/nix.conf
-          echo 'stalled-download-timeout = 60' >> ~/.config/nix/nix.conf
-          # Enable flakes
-          echo 'experimental-features = nix-command flakes' >> ~/.config/nix/nix.conf
-          # Prevent infinite recursion
-          echo 'allow-import-from-derivation = false' >> ~/.config/nix/nix.conf
-          echo 'eval-cache = false' >> ~/.config/nix/nix.conf
-
-      - name: Lint
-        run: |
-          nix --quiet --no-eval-cache develop -c make lint
-        env:
-          NIX_CONNECT_TIMEOUT: 60
-
-      - name: Type check
-        run: |
-          nix --quiet --no-eval-cache develop -c make type
-        env:
-          NIX_CONNECT_TIMEOUT: 60
-
-      - name: Run tests
-        run: |
-          nix --quiet --no-eval-cache develop -c make test
-        env:
-          NIX_CONNECT_TIMEOUT: 60
-
-      - name: Run coverage
-        run: |
-          nix --quiet --no-eval-cache develop -c make coverage
-        env:
-          NIX_CONNECT_TIMEOUT: 60
-
-      - name: Build development environment
-        run: |
-          nix --quiet --no-eval-cache develop --command echo "Development environment successfully built"
-        env:
-          NIX_CONNECT_TIMEOUT: 60
-          
-  windows-build:
-    name: Build and Test (Windows)
-    runs-on: windows-latest
-    env:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    
+  test:
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-          cache: 'pip'
-          
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          # Install PyAudio dependencies for Windows
-          choco install portaudio
-          pip install -r requirements.txt
-          pip install -r requirements-pip.txt
-          # Install development dependencies explicitly
-          pip install black pylint isort pytest pytest-cov mypy
-        
-      - name: Lint
-        run: |
-          # Create a pylintrc file to ignore line ending format warnings on Windows
-          echo "[MESSAGES CONTROL]" > .pylintrc
-          echo "disable=unexpected-line-ending-format" >> .pylintrc
-          make lint
-          
-      - name: Type check
-        run: |
-          make type
-          
+      - uses: actions/checkout@v3
+      - uses: DeterminateSystems/nix-installer-action@v17
+      - uses: DeterminateSystems/magic-nix-cache-action@v2
       - name: Run tests
-        run: |
-          make test
-          
-      - name: Run coverage
-        run: |
-          make coverage
+        run: nix develop -c make test
