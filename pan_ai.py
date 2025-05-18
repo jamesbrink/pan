@@ -34,13 +34,13 @@ class PanAI:
         self.model.to(self.device)
         self.model.eval()  # Set the model to evaluation mode
 
-    def generate_response(self, prompt, max_length=100):
+    def generate_response(self, prompt, max_new_tokens=150):
         """
         Generate a text response based on the given prompt.
         
         Args:
             prompt (str): The input text to generate a response from
-            max_length (int, optional): Maximum length of the generated response
+            max_new_tokens (int, optional): Maximum length of the generated response
             
         Returns:
             str: The generated text response
@@ -48,7 +48,7 @@ class PanAI:
         inputs = self.tokenizer(prompt, return_tensors="pt").to(self.device)
         outputs = self.model.generate(
             **inputs, 
-            max_length=max_length, 
+            max_new_tokens=max_new_tokens, 
             num_return_sequences=1,
             do_sample=True,          # Allow sampling (needed for temperature)
             temperature=0.7,         # Control randomness (lower is more deterministic)
@@ -56,6 +56,7 @@ class PanAI:
         )
         response = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
         return response
+
 
 # Global PanAI instance for use throughout the application
 pan_ai = PanAI()

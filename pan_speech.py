@@ -59,18 +59,18 @@ class SpeakManager:
         settings = emotion_voices.get(mood, emotion_voices['neutral'])
 
         if is_windows:
-            # SAPI5 Rate (-5 to +5 for fine control, 0 is normal)
+            # SAPI5 Rate (-5 to +5) - Forced Safe Range
             scaled_rate = max(-5, min(5, settings['rate']))
-            self.engine.Rate = scaled_rate  # Corrected scaling for SAPI5
+            self.engine.Rate = scaled_rate
             self.engine.Volume = int(settings['volume'] * 100)
-            print(f"[SpeakManager] SAPI5 Rate: {self.engine.Rate}, Volume: {self.engine.Volume}")
+            print(f"[SpeakManager] SAPI5 Rate (Corrected): {self.engine.Rate}, Volume: {self.engine.Volume}")
         
         elif is_linux:
             # espeak (100-200 for natural speed)
-            adjusted_rate = int(150 + (settings['rate'] * 10))  # Normal: 150
+            adjusted_rate = int(150 + (settings['rate'] * 10))
             self.engine.setProperty('rate', adjusted_rate)
             self.engine.setProperty('volume', settings['volume'])
-            print(f"[SpeakManager] espeak Rate: {adjusted_rate} Volume: {settings['volume']}")
+            print(f"[SpeakManager] espeak Rate: {adjusted_rate}, Volume: {settings['volume']}")
 
     def speak(self, text, mood_override=None):
         """Queue text for speaking."""
