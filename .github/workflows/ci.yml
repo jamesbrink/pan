@@ -166,6 +166,9 @@ jobs:
         
       - name: Lint
         run: |
+          # Create a pylintrc file to ignore line ending format warnings on Windows
+          echo "[MESSAGES CONTROL]" > .pylintrc
+          echo "disable=unexpected-line-ending-format" >> .pylintrc
           make lint
           
       - name: Type check
