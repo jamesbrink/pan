@@ -6,6 +6,7 @@ user interaction, command processing, and manages the autonomous curiosity syste
 """
 
 import argparse
+import platform
 import random
 import signal
 import sys
@@ -18,7 +19,6 @@ import pan_conversation
 import pan_core
 import pan_research
 import pan_speech
-import platform
 
 # Global variables for tracking state
 curiosity_active = True
@@ -26,17 +26,23 @@ last_interaction_time = time.time()
 last_speech_time = 0
 keyword_activated = False
 
+# Configuration settings - initialize with defaults, will be updated in load_config()
+MAX_SHORT_TERM_MEMORY = 10
+IDLE_THRESHOLD_SECONDS = 300
+MIN_SPEECH_INTERVAL_SECONDS = 15
+USE_KEYWORD_ACTIVATION = True
+CONTINUOUS_LISTENING = True
 
 # Load Configuration Settings
 def load_config():
     config = pan_config.get_config()
     global MAX_SHORT_TERM_MEMORY, IDLE_THRESHOLD_SECONDS, MIN_SPEECH_INTERVAL_SECONDS
     global USE_KEYWORD_ACTIVATION, CONTINUOUS_LISTENING
-    
+
     MAX_SHORT_TERM_MEMORY = config["conversation"]["max_short_term_memory"]
     IDLE_THRESHOLD_SECONDS = config["conversation"]["idle_threshold_seconds"]
     MIN_SPEECH_INTERVAL_SECONDS = config["conversation"]["min_speech_interval_seconds"]
-    
+
     # Load keyword activation settings
     USE_KEYWORD_ACTIVATION = config["speech_recognition"]["use_keyword_activation"]
     CONTINUOUS_LISTENING = config["speech_recognition"]["continuous_listening"]
@@ -85,7 +91,7 @@ def curiosity_loop():
 def listen_with_retries(max_attempts=3, timeout=None):
     """
     Attempt to listen for user speech input with continuous mode support.
-    
+
     In continuous mode, after max_attempts, it returns to wake word detection
     without repeatedly showing failure messages.
 
@@ -101,7 +107,7 @@ def listen_with_retries(max_attempts=3, timeout=None):
         KeyboardInterrupt: Re-raises keyboard interrupt to allow clean exit
     """
     global exit_requested
-    
+
     # Wait for any TTS to finish before listening
     wait_start = time.time()
     wait_timeout = 10  # seconds - reduced to ensure faster response to CTRL+C
@@ -115,13 +121,17 @@ def listen_with_retries(max_attempts=3, timeout=None):
 
             elapsed = time.time() - wait_start
             if elapsed > wait_timeout:
-                print(f"Warning: Timeout waiting for TTS to finish ({elapsed:.1f}s), forcing listen.")
+                print(
+                    f"Warning: Timeout waiting for TTS to finish ({elapsed:.1f}s), forcing listen."
+                )
                 break
-                
+
             if int(elapsed) % 5 == 0 and int(elapsed) != last_log_time:
-                print(f"Still waiting for TTS to finish after {int(elapsed)} seconds...")
+                print(
+                    f"Still waiting for TTS to finish after {int(elapsed)} seconds..."
+                )
                 last_log_time = int(elapsed)
-                
+
             time.sleep(0.1)
     except KeyboardInterrupt:
         print("\nKeyboard interrupt detected while waiting for TTS...")
@@ -137,15 +147,15 @@ def listen_with_retries(max_attempts=3, timeout=None):
         try:
             # Only recalibrate and display verbose messages on first attempt
             use_recalibration = attempt == 0  # First attempt is zero-indexed
-            
+
             # Use shorter timeout for retries to make the process feel more responsive
             current_timeout = timeout if attempt == 0 else min(timeout or 3, 3)
-            
+
             # Only display "Listening..." on the first attempt to reduce noise
             text = pan_speech.listen_to_user(
-                timeout=current_timeout, 
+                timeout=current_timeout,
                 recalibrate=use_recalibration,
-                quiet_mode=(attempt > 0)  # Reduce output on retry attempts
+                quiet_mode=(attempt > 0),  # Reduce output on retry attempts
             )
 
             # Check if exit has been requested by signal handler
@@ -157,14 +167,14 @@ def listen_with_retries(max_attempts=3, timeout=None):
 
             # Don't display "retrying" message on the last attempt
             if attempt < max_attempts - 1:
-                print(f"Didn't catch that, listening again...")
+                print("Didn't catch that, listening again...")
                 time.sleep(0.3)  # Shorter delay between attempts
-                
+
         except KeyboardInterrupt:
             print("\nKeyboard interrupt detected during speech recognition")
             cleanup_and_exit()
             return None
-            
+
     # If we get here, we've reached max attempts without success
     # Don't print verbose "Max listen attempts" message - just return None
     # This allows the main loop to handle it more gracefully
@@ -213,42 +223,52 @@ def check_macos_microphone_permissions():
     """
     if platform.system() != "Darwin":
         return
-        
+
     try:
         # Try to just list microphones as a simple permissions check
         import speech_recognition as sr
+
         mic_list = sr.Microphone.list_microphone_names()
-        
+
         if not mic_list:
-            print("\n" + "="*60)
-            print(" "*10 + "*** MACOS MICROPHONE PERMISSION ALERT ***")
-            print("="*60)
+            print("\n" + "=" * 60)
+            print(" " * 10 + "*** MACOS MICROPHONE PERMISSION ALERT ***")
+            print("=" * 60)
             print("No microphones were detected on your macOS system!")
-            print("This usually means Terminal or your IDE needs microphone permission.")
+            print(
+                "This usually means Terminal or your IDE needs microphone permission."
+            )
             print("\nTo fix this:")
-            print("1. Open System Preferences > Security & Privacy > Privacy > Microphone")
-            print("2. Make sure Terminal or your IDE has permission to access the microphone")
+            print(
+                "1. Open System Preferences > Security & Privacy > Privacy > Microphone"
+            )
+            print(
+                "2. Make sure Terminal or your IDE has permission to access the microphone"
+            )
             print("3. You might need to quit Terminal/IDE completely and restart it")
             print("4. Try launching from a different Terminal window if using Nix")
-            print("\nThe application will continue, but speech recognition will not work")
+            print(
+                "\nThe application will continue, but speech recognition will not work"
+            )
             print("until you grant microphone permissions!")
-            print("="*60 + "\n")
+            print("=" * 60 + "\n")
     except Exception as e:
         print(f"Error checking microphone permissions: {e}")
 
 
 if __name__ == "__main__":
     # Parse command line arguments
-    parser = argparse.ArgumentParser(description='PAN - Personal Assistant with Nuance')
-    parser.add_argument('--test-mic', action='store_true',
-                        help='Run microphone test and exit')
+    parser = argparse.ArgumentParser(description="PAN - Personal Assistant with Nuance")
+    parser.add_argument(
+        "--test-mic", action="store_true", help="Run microphone test and exit"
+    )
     args = parser.parse_args()
-    
+
     # Special case: if running microphone test, just do that and exit
     if args.test_mic:
         pan_speech.test_microphone()
         sys.exit(0)
-    
+
     # Register the signal handler for CTRL+C
     signal.signal(signal.SIGINT, signal_handler)
 
@@ -281,7 +301,7 @@ if __name__ == "__main__":
     wake_word_info = ""
     if USE_KEYWORD_ACTIVATION and CONTINUOUS_LISTENING:
         wake_word_info = f" I'm in continuous listening mode, so you can activate me anytime by saying '{assistant_name}'."
-    
+
     try:
         pan_speech.speak(
             f"{time_greeting}! I'm {assistant_name}{name_connector}{name_explanation}.{wake_word_info} I can help you search for information, check the weather, get news updates, or just chat. What can I do for you today?"
@@ -304,7 +324,9 @@ if __name__ == "__main__":
                             if keyword_detected:
                                 # Wake word detected, break out of the loop
                                 assistant_name = pan_config.ASSISTANT_NAME
-                                print(f"Wake word '{assistant_name}' detected! Listening for command...")
+                                print(
+                                    f"Wake word '{assistant_name}' detected! Listening for command..."
+                                )
                                 # Give a brief acknowledgment to let the user know it's listening
                                 # Wait a moment to make sure any previous TTS operations are completed
                                 time.sleep(0.5)
@@ -315,33 +337,40 @@ if __name__ == "__main__":
                                 except Exception as e:
                                     print(f"Error acknowledging wake word: {e}")
                                 break
-                            
+
                             # Counter to detect if we're having wake word detection issues
                             # This will let us show a helpful message after several attempts
-                            if not hasattr(listen_for_keyword, 'attempt_counter'):
-                                listen_for_keyword.attempt_counter = 0
-                            
-                            listen_for_keyword.attempt_counter += 1
-                            
+                            # Store attempt counter as an attribute of the function
+                            if not hasattr(pan_speech.listen_for_keyword, "attempt_counter"):
+                                pan_speech.listen_for_keyword.attempt_counter = 0
+
+                            pan_speech.listen_for_keyword.attempt_counter += 1
+
                             # After several attempts, show a message about potential mic issues
-                            if listen_for_keyword.attempt_counter % 20 == 0:
+                            if pan_speech.listen_for_keyword.attempt_counter % 20 == 0:
                                 platform_name = platform.system()
                                 if platform_name == "Darwin":  # macOS
-                                    print("\nTip: Not detecting wake word? You may have microphone permission issues.")
-                                    print("Run with '--test-mic' to diagnose, or check System Preferences > Privacy > Microphone\n")
+                                    print(
+                                        "\nTip: Not detecting wake word? You may have microphone permission issues."
+                                    )
+                                    print(
+                                        "Run with '--test-mic' to diagnose, or check System Preferences > Privacy > Microphone\n"
+                                    )
                                 else:
-                                    print("\nTip: Not detecting wake word? Try running with '--test-mic' to diagnose microphone issues\n")
-                                
+                                    print(
+                                        "\nTip: Not detecting wake word? Try running with '--test-mic' to diagnose microphone issues\n"
+                                    )
+
                             # Brief pause to prevent CPU overuse
                             time.sleep(0.1)
                         except KeyboardInterrupt:
                             cleanup_and_exit()
                             break
-                    
+
                     # If exit was requested during keyword detection, break out
                     if exit_requested:
                         break
-                
+
                 # Now listen for the actual command
                 user_input = listen_with_retries()
                 if exit_requested:
@@ -360,14 +389,16 @@ if __name__ == "__main__":
                     assistant_name = pan_config.ASSISTANT_NAME
                     print(f"{assistant_name}: {response}")
                     pan_speech.speak(response)
-                    
+
                     # Reset the last interaction time
                     last_interaction_time = time.time()
                 else:
                     # In continuous listening mode, go back to listening for wake word
                     # without excessive messages
                     if USE_KEYWORD_ACTIVATION and CONTINUOUS_LISTENING:
-                        print(f"\nWaiting for wake word. Say '{pan_config.ASSISTANT_NAME}' to activate.")
+                        print(
+                            f"\nWaiting for wake word. Say '{pan_config.ASSISTANT_NAME}' to activate."
+                        )
             except KeyboardInterrupt:
                 # This should be caught by the signal handler, but just in case
                 cleanup_and_exit()

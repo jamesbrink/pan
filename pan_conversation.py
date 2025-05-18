@@ -22,12 +22,13 @@ print(f"Loading conversation model: {pan_config.CONVERSATION_MODEL_NAME}...")
 context_length = pan_config.MODEL_CONTEXT_LENGTH
 quantization_level = pan_config.MODEL_QUANTIZATION_LEVEL
 
-print(f"Using context length: {context_length} tokens and quantization level: {quantization_level}")
+print(
+    f"Using context length: {context_length} tokens and quantization level: {quantization_level}"
+)
 
 # Configure tokenizer with appropriate context length
 tokenizer = AutoTokenizer.from_pretrained(
-    pan_config.CONVERSATION_MODEL_NAME,
-    model_max_length=context_length
+    pan_config.CONVERSATION_MODEL_NAME, model_max_length=context_length
 )
 
 # Set up quantization configuration
@@ -38,24 +39,31 @@ try:
         # Check if bitsandbytes is available with required features
         try:
             import bitsandbytes
+
             bnb_version = getattr(bitsandbytes, "__version__", "0.0.0")
             if bits == 4 and tuple(map(int, bnb_version.split("."))) < (0, 41, 0):
-                print(f"Warning: bitsandbytes version {bnb_version} may not support 4-bit quantization. Using 8-bit instead.")
+                print(
+                    f"Warning: bitsandbytes version {bnb_version} may not support 4-bit quantization. Using 8-bit instead."
+                )
                 bits = 8
-                
+
             quantization_config = BitsAndBytesConfig(
                 load_in_4bit=bits == 4,
                 load_in_8bit=bits == 8,
                 bnb_4bit_compute_dtype=torch.float16,
                 bnb_4bit_use_double_quant=True,
-                bnb_4bit_quant_type="nf4"
+                bnb_4bit_quant_type="nf4",
             )
             print(f"Using {bits}-bit quantization for model loading")
         except (ImportError, AttributeError):
-            print("Warning: bitsandbytes not available or not supported, falling back to standard loading")
+            print(
+                "Warning: bitsandbytes not available or not supported, falling back to standard loading"
+            )
             quantization_level = "none"
 except Exception as e:
-    print(f"Warning: Error setting up quantization, falling back to standard loading: {e}")
+    print(
+        f"Warning: Error setting up quantization, falling back to standard loading: {e}"
+    )
 
 # Load the model with appropriate config
 model_kwargs = {}
@@ -63,8 +71,7 @@ if quantization_config:
     model_kwargs["quantization_config"] = quantization_config
 
 model = AutoModelForCausalLM.from_pretrained(
-    pan_config.CONVERSATION_MODEL_NAME,
-    **model_kwargs
+    pan_config.CONVERSATION_MODEL_NAME, **model_kwargs
 )
 
 # Only move to device if not using quantization (quantized models handle this differently)
@@ -75,6 +82,7 @@ if quantization_level.lower() == "none":
 model.eval()
 print(f"Conversation model loaded successfully: {pan_config.CONVERSATION_MODEL_NAME}")
 
+
 # Prepare the system prompt
 def create_system_prompt():
     """
@@ -82,7 +90,7 @@ def create_system_prompt():
     """
     assistant_name = pan_config.ASSISTANT_NAME
     model_name = pan_config.CONVERSATION_MODEL_NAME.lower()
-    
+
     # System prompt that defines assistant's personality and capabilities
     # Keep it concise and focused on essential instructions
     system_message = (
@@ -99,8 +107,9 @@ def create_system_prompt():
     else:
         # Default format for other models
         formatted_system = f"System: {system_message}"
-        
+
     return formatted_system
+
 
 # Context Memory (Session-based) with system prompt initialized at startup
 conversation_history = [create_system_prompt()]
@@ -175,14 +184,14 @@ def local_llm_conversation(prompt):
 
     # Format user input based on model
     model_name = pan_config.CONVERSATION_MODEL_NAME.lower()
-    
+
     if "qwen" in model_name:
         # For Qwen models, use their chat format
         user_message = f"<|im_start|>user\n{prompt}<|im_end|>"
     else:
         # Default format
         user_message = f"User: {prompt}"
-        
+
     # Add user input to memory
     conversation_history.append(user_message)
 
@@ -193,39 +202,48 @@ def local_llm_conversation(prompt):
     # Generate response with context memory
     context_text = "\n".join(conversation_history)
     print(f"DEBUG: Using {pan_config.CONVERSATION_MODEL_NAME} with context memory...")
-    
+
     # Debug the conversation history size (for debugging purposes)
     # This helps monitor if we're keeping context within reasonable size
     context_tokens = len(tokenizer.encode(context_text))
-    print(f"Context size: {len(conversation_history)} messages, {context_tokens} tokens")
-    
+    print(
+        f"Context size: {len(conversation_history)} messages, {context_tokens} tokens"
+    )
+
     # Determine the model-specific prompt format
     # Different models have different prompt formats
     model_name = pan_config.CONVERSATION_MODEL_NAME.lower()
     assistant_name = pan_config.ASSISTANT_NAME
-    
+
     if "qwen" in model_name:
         # Qwen models use a specific chat format
         prompt_format = f"{context_text}\n<|im_start|>assistant"
+        # response_sep variable defined but not used in current implementation
+        # pylint: disable=unused-variable
         response_sep = "<|im_start|>assistant"
     else:
         # Default format for other models
         prompt_format = f"{context_text}\n{assistant_name}:"
+        # response_sep variable defined but not used in current implementation
+        # pylint: disable=unused-variable
         response_sep = f"{assistant_name}:"
 
     try:
         with torch.no_grad():
             inputs = tokenizer(prompt_format, return_tensors="pt")
-            
+
             # Use a reasonable max_length relative to the configured context length
             # For generation we want to limit to a portion of the total context to avoid OOM errors
-            max_gen_length = min(pan_config.MODEL_CONTEXT_LENGTH, int(pan_config.MODEL_CONTEXT_LENGTH * 0.25) + len(inputs.input_ids[0]))
-            
+            max_gen_length = min(
+                pan_config.MODEL_CONTEXT_LENGTH,
+                int(pan_config.MODEL_CONTEXT_LENGTH * 0.25) + len(inputs.input_ids[0]),
+            )
+
             # Move inputs to the right device based on quantization settings
             if pan_config.MODEL_QUANTIZATION_LEVEL.lower() == "none":
                 device = next(model.parameters()).device
                 inputs = {k: v.to(device) for k, v in inputs.items()}
-            
+
             outputs = model.generate(
                 inputs.input_ids,
                 attention_mask=inputs.attention_mask,
@@ -237,7 +255,7 @@ def local_llm_conversation(prompt):
                 top_p=0.9,
             )
             full_response = tokenizer.decode(outputs[0], skip_special_tokens=True)
-            
+
             # Process the response based on the model format
             if "qwen" in model_name:
                 # For Qwen models, the response comes after the assistant tag
@@ -250,76 +268,83 @@ def local_llm_conversation(prompt):
             else:
                 # For other models, split on the assistant name
                 response = full_response.split(f"{assistant_name}:")[-1].strip()
-            
+
             # Initial clean-up of common artifacts
             response = response.lstrip("<|im_end|>").strip()
-                
+
             # Clean up response - remove any model artifacts
             # Common patterns to clean up
             patterns_to_clean = [
-                "system", 
-                "user", 
-                "assistant", 
+                "system",
+                "user",
+                "assistant",
                 "<|im_start|>",
                 "<|im_end|>",
                 f"You are {assistant_name}",
-                "friendly personal assistant"
+                "friendly personal assistant",
             ]
-            
+
             # Check if the response contains any of our system prompt text
-            contains_system_text = any(pattern in response for pattern in patterns_to_clean)
-            
+            contains_system_text = any(
+                pattern in response for pattern in patterns_to_clean
+            )
+
             if contains_system_text:
                 # System prompt likely leaked into response, do a thorough cleaning
                 lines = response.split("\n")
                 cleaned_lines = []
                 skip_line = False
-                
+
                 for line in lines:
                     # Check if this line should be skipped
                     if any(pattern in line for pattern in patterns_to_clean):
                         skip_line = True
                         continue
-                        
+
                     # If we're still in skip mode, check if this line might be content now
                     if skip_line:
                         # If we find a line that doesn't look like part of a prompt, start including lines again
-                        if line and not any(p in line for p in ["you", "help", "memory", "information", "context"]):
+                        if line and not any(
+                            p in line
+                            for p in ["you", "help", "memory", "information", "context"]
+                        ):
                             skip_line = False
                         else:
                             continue
-                    
+
                     # Add the line if we're not skipping
                     if not skip_line:
                         cleaned_lines.append(line)
-                
+
                 # If we have cleaned lines, use those instead
                 if cleaned_lines:
                     cleaned_response = "\n".join(cleaned_lines).strip()
                     if cleaned_response:  # Only use if not empty
                         response = cleaned_response
-            
+
             # Final cleanup for common artifacts that might remain
             if response.startswith("assistant"):
                 response = response[9:].strip()  # "assistant" is 9 chars
-                
+
             # Debug: Show the first 50 chars of the response to help troubleshoot
-            print(f"Generated response: {response[:50]}{'...' if len(response) > 50 else ''}")
-            
+            print(
+                f"Generated response: {response[:50]}{'...' if len(response) > 50 else ''}"
+            )
+
     except Exception as e:
         response = f"Error with language model: {str(e)}"
 
     # Store response in memory with proper formatting
     model_name = pan_config.CONVERSATION_MODEL_NAME.lower()
     assistant_name = pan_config.ASSISTANT_NAME
-    
+
     if "qwen" in model_name:
         # For Qwen models, use their chat format
         assistant_message = f"<|im_start|>assistant\n{response}<|im_end|>"
     else:
         # Default format
         assistant_message = f"{assistant_name}: {response}"
-        
+
     conversation_history.append(assistant_message)
     return response
 
@@ -328,41 +353,47 @@ def local_llm_conversation(prompt):
 def summarize_memory():
     global conversation_history
     print("DEBUG: Summarizing conversation history...")
-    
+
     # Get the current system message if it exists (usually the first message)
     system_message = None
     if conversation_history and (
-        ("system" in conversation_history[0].lower()) or 
-        ("System:" in conversation_history[0])
+        ("system" in conversation_history[0].lower())
+        or ("System:" in conversation_history[0])
     ):
         system_message = conversation_history[0]
-    
+
     # Get the base conversation text
     conversation_text = "\n".join(conversation_history)
-    
+
     # Determine the model-specific prompt format
     model_name = pan_config.CONVERSATION_MODEL_NAME.lower()
+    # pylint: disable=unused-variable
     assistant_name = pan_config.ASSISTANT_NAME
-    
+
     if "qwen" in model_name:
         # Qwen models use a specific chat format
         summary_prompt = f"{conversation_text}\n<|im_start|>user\nSummarize this conversation in one paragraph.<|im_end|>\n<|im_start|>assistant"
     else:
         # Default format for other models
-        summary_prompt = f"{conversation_text}\nSummarize this conversation in one paragraph:"
-    
+        summary_prompt = (
+            f"{conversation_text}\nSummarize this conversation in one paragraph:"
+        )
+
     try:
         with torch.no_grad():
             inputs = tokenizer(summary_prompt, return_tensors="pt")
-            
+
             # Use a reasonable max_length relative to the configured context length
-            max_gen_length = min(pan_config.MODEL_CONTEXT_LENGTH, int(pan_config.MODEL_CONTEXT_LENGTH * 0.25) + len(inputs.input_ids[0]))
-            
+            max_gen_length = min(
+                pan_config.MODEL_CONTEXT_LENGTH,
+                int(pan_config.MODEL_CONTEXT_LENGTH * 0.25) + len(inputs.input_ids[0]),
+            )
+
             # Move inputs to the right device based on quantization settings
             if pan_config.MODEL_QUANTIZATION_LEVEL.lower() == "none":
                 device = next(model.parameters()).device
                 inputs = {k: v.to(device) for k, v in inputs.items()}
-                
+
             outputs = model.generate(
                 inputs.input_ids,
                 attention_mask=inputs.attention_mask,
@@ -374,7 +405,7 @@ def summarize_memory():
                 top_p=0.9,
             )
             full_response = tokenizer.decode(outputs[0], skip_special_tokens=True)
-            
+
             # Process the summary based on the model format
             if "qwen" in model_name:
                 # For Qwen models, the response comes after the assistant tag
@@ -385,16 +416,21 @@ def summarize_memory():
             else:
                 # For other models, we look for the summary part
                 if "Summarize this conversation" in full_response:
-                    summary = full_response.split("Summarize this conversation in one paragraph:")[-1].strip()
+                    summary = full_response.split(
+                        "Summarize this conversation in one paragraph:"
+                    )[-1].strip()
                 else:
                     summary = full_response.split(conversation_text)[-1].strip()
-            
+
             # Create new conversation history with system message (if it existed) and summary
             if system_message:
-                conversation_history = [system_message, f"CONVERSATION SUMMARY: {summary.strip()}"]
+                conversation_history = [
+                    system_message,
+                    f"CONVERSATION SUMMARY: {summary.strip()}",
+                ]
             else:
                 conversation_history = [f"CONVERSATION SUMMARY: {summary.strip()}"]
-                
+
             print(f"DEBUG: Memory summarized: {summary.strip()}")
     except Exception as e:
         print(f"Error summarizing memory: {str(e)}")
