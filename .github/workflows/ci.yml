@@ -42,34 +42,37 @@ jobs:
           echo 'stalled-download-timeout = 60' >> ~/.config/nix/nix.conf
           # Enable flakes
           echo 'experimental-features = nix-command flakes' >> ~/.config/nix/nix.conf
+          # Prevent infinite recursion
+          echo 'allow-import-from-derivation = false' >> ~/.config/nix/nix.conf
+          echo 'eval-cache = false' >> ~/.config/nix/nix.conf
 
       - name: Lint
         run: |
-          nix --quiet develop -c make lint
+          nix --quiet --no-eval-cache develop -c make lint
         env:
           NIX_CONNECT_TIMEOUT: 60
 
       - name: Type check
         run: |
-          nix --quiet develop -c make type
+          nix --quiet --no-eval-cache develop -c make type
         env:
           NIX_CONNECT_TIMEOUT: 60
 
       - name: Run tests
         run: |
-          nix --quiet develop -c make test
+          nix --quiet --no-eval-cache develop -c make test
         env:
           NIX_CONNECT_TIMEOUT: 60
 
       - name: Run coverage
         run: |
-          nix --quiet develop -c make coverage
+          nix --quiet --no-eval-cache develop -c make coverage
         env:
           NIX_CONNECT_TIMEOUT: 60
 
       - name: Build development environment
         run: |
-          nix --quiet develop --command echo "Development environment successfully built"
+          nix --quiet --no-eval-cache develop --command echo "Development environment successfully built"
         env:
           NIX_CONNECT_TIMEOUT: 60
 
@@ -107,34 +110,37 @@ jobs:
           echo 'stalled-download-timeout = 60' >> ~/.config/nix/nix.conf
           # Enable flakes
           echo 'experimental-features = nix-command flakes' >> ~/.config/nix/nix.conf
+          # Prevent infinite recursion
+          echo 'allow-import-from-derivation = false' >> ~/.config/nix/nix.conf
+          echo 'eval-cache = false' >> ~/.config/nix/nix.conf
 
       - name: Lint
         run: |
-          nix --quiet develop -c make lint
+          nix --quiet --no-eval-cache develop -c make lint
         env:
           NIX_CONNECT_TIMEOUT: 60
 
       - name: Type check
         run: |
-          nix --quiet develop -c make type
+          nix --quiet --no-eval-cache develop -c make type
         env:
           NIX_CONNECT_TIMEOUT: 60
 
       - name: Run tests
         run: |
-          nix --quiet develop -c make test
+          nix --quiet --no-eval-cache develop -c make test
         env:
           NIX_CONNECT_TIMEOUT: 60
 
       - name: Run coverage
         run: |
-          nix --quiet develop -c make coverage
+          nix --quiet --no-eval-cache develop -c make coverage
         env:
           NIX_CONNECT_TIMEOUT: 60
 
       - name: Build development environment
         run: |
-          nix --quiet develop --command echo "Development environment successfully built"
+          nix --quiet --no-eval-cache develop --command echo "Development environment successfully built"
         env:
           NIX_CONNECT_TIMEOUT: 60
           
