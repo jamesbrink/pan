@@ -28,10 +28,10 @@ VOSK_MODEL_PATH = "vosk_model"
 
 # Voice parameters for different emotional states
 emotion_voices = {
-    'happy': {'rate': DEFAULT_VOICE_RATE + 1, 'volume': DEFAULT_VOICE_VOLUME + 0.1},
-    'neutral': {'rate': DEFAULT_VOICE_RATE, 'volume': DEFAULT_VOICE_VOLUME},
-    'sad': {'rate': DEFAULT_VOICE_RATE - 1, 'volume': DEFAULT_VOICE_VOLUME - 0.2},
-    'angry': {'rate': DEFAULT_VOICE_RATE + 2, 'volume': DEFAULT_VOICE_VOLUME + 0.1}
+    'happy': {'rate': 0, 'volume': DEFAULT_VOICE_VOLUME + 0.1},
+    'neutral': {'rate': 0, 'volume': DEFAULT_VOICE_VOLUME},
+    'sad': {'rate': -1, 'volume': DEFAULT_VOICE_VOLUME - 0.2},
+    'angry': {'rate': 1, 'volume': DEFAULT_VOICE_VOLUME + 0.1}
 }
 
 class SpeakManager:
@@ -41,6 +41,7 @@ class SpeakManager:
         self.thread = threading.Thread(target=self._worker, daemon=True)
         self.thread.start()
         self._init_engine()
+        self.interrupt_speaking = threading.Event()  # Interrupt Event for stopping speech
 
     def _init_engine(self):
         print("[SpeakManager] Initializing TTS engine...")
@@ -59,14 +60,14 @@ class SpeakManager:
         settings = emotion_voices.get(mood, emotion_voices['neutral'])
 
         if is_windows:
-            # SAPI5 Rate (-5 to +5) - Forced Safe Range
-            scaled_rate = max(-5, min(5, settings['rate']))
+            # SAPI5 Rate (-2 to +2) - Stable range
+            scaled_rate = max(-2, min(2, settings['rate']))
             self.engine.Rate = scaled_rate
             self.engine.Volume = int(settings['volume'] * 100)
             print(f"[SpeakManager] SAPI5 Rate (Corrected): {self.engine.Rate}, Volume: {self.engine.Volume}")
         
         elif is_linux:
-            # espeak (100-200 for natural speed)
+            # espeak (150 for natural speed)
             adjusted_rate = int(150 + (settings['rate'] * 10))
             self.engine.setProperty('rate', adjusted_rate)
             self.engine.setProperty('volume', settings['volume'])
@@ -76,12 +77,22 @@ class SpeakManager:
         """Queue text for speaking."""
         self.queue.put((text, mood_override or pan_emotions.get_mood()))
 
+    def stop(self):
+        """Immediately stop any ongoing speech."""
+        self.interrupt_speaking.set()  # Trigger interrupt event
+        with self.lock:
+            if is_windows:
+                self.engine.Speak("", 3)  # SAPI5: Immediate stop
+            elif is_linux:
+                self.engine.stop()       # espeak: Immediate stop
+        print("[SpeakManager] Speech interrupted.")
+
     def _worker(self):
         """TTS Worker Thread - Continuous Processing"""
         while True:
             text, mood = self.queue.get()
+            self.interrupt_speaking.clear()  # Reset interrupt flag
             try:
-                self._speak_with_recovery("Hmm, let me think about that.", "neutral")
                 self._speak_with_recovery(text, mood)
             except Exception as e:
                 print(f"[TTS ERROR] Fatal Error in TTS Worker: {e}")
@@ -91,27 +102,28 @@ class SpeakManager:
                 self.queue.task_done()
 
     def _speak_with_recovery(self, text, mood):
-        """Speak with Automatic Recovery"""
+        """Speak with Automatic Recovery and Interruptibility"""
         with self.lock:
             self.set_voice_by_mood(mood)
             print(f"[SpeakManager] Speaking with mood: {mood}")
+
             if is_windows:
                 self.engine.Speak(text)
             elif is_linux:
                 self.engine.say(text)
                 self.engine.runAndWait()
 
-# Global instance of SpeakManager to be used throughout the application
+
+# Global instance of SpeakManager
 speak_manager = SpeakManager()
 
 def speak(text, mood_override=None):
     """Public function to speak text."""
-    try:
-        speak_manager.speak(text, mood_override)
-    except Exception as e:
-        print(f"[TTS ERROR] Reinitializing TTS due to error: {e}")
-        speak_manager._init_engine()
-        speak_manager.speak(text, mood_override)
+    speak_manager.speak(text, mood_override)
+
+def stop_speaking():
+    """Public function to immediately stop speaking."""
+    speak_manager.stop()
 
 def listen_to_user(timeout=5, phrase_time_limit=10):
     recognizer = sr.Recognizer()
@@ -121,23 +133,9 @@ def listen_to_user(timeout=5, phrase_time_limit=10):
         try:
             audio = recognizer.listen(source, timeout=timeout, phrase_time_limit=phrase_time_limit)
             print("Processing audio...")
-            try:
-                text = recognizer.recognize_google(audio)
-                print(f"You said (Google): {text}")
-                return text
-            except:
-                print("[INFO] Google failed, using VOSK (offline)...")
-                if not os.path.exists(VOSK_MODEL_PATH):
-                    print("VOSK model not found. Please download the VOSK model.")
-                    return None
-
-                model = Model(VOSK_MODEL_PATH)
-                recognizer_vosk = KaldiRecognizer(model, 16000)
-                recognizer_vosk.AcceptWaveform(audio.get_raw_data())
-                result = json.loads(recognizer_vosk.Result())
-                text = result.get("text", "")
-                print(f"You said (VOSK): {text}")
-                return text
+            text = recognizer.recognize_google(audio)
+            print(f"You said (Google): {text}")
+            return text
         except sr.WaitTimeoutError:
             print("Listening timed out while waiting for phrase to start.")
         except sr.UnknownValueError:
