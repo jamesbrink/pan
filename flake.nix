@@ -11,15 +11,16 @@
       let
         pkgs = import nixpkgs {
           inherit system;
-          # Allow unfree packages for CUDA dependencies
-          config = { allowUnfree = true; };
+          # Allow unfree packages but disable CUDA-related packages
+          config = { 
+            allowUnfree = true;
+            # Disable CUDA to avoid platform compatibility issues
+            cudaSupport = false;
+          };
         };
         
         # Determine if we're on Darwin (macOS)
         isDarwin = pkgs.stdenv.isDarwin;
-        
-        # Check if bitsandbytes is available (without using deepSeq)
-        hasBitsAndBytes = builtins.hasAttr "bitsandbytes" pkgs.python312.pkgs;
         
         # Base Python packages needed on all platforms
         basePythonPackages = with pkgs.python312.pkgs; [
@@ -39,12 +40,11 @@
           pyaudio
           requests
           transformers
-          torch
+          # Use CPU-only torch to avoid CUDA dependencies 
+          # But make sure to use only one torch version (either torch or torch-bin, not both)
+          (if isDarwin then torch else torch-bin)
           python-dotenv
           huggingface-hub
-          # Add bitsandbytes if available
-          (if hasBitsAndBytes then bitsandbytes else null)
-          accelerate
           
           # Utility packages
           numpy
@@ -102,38 +102,24 @@
             echo "Python package versions:"
             for pkg in transformers huggingface_hub accelerate; do
               echo -n "$pkg: "
-              python -c "
-              import sys
-              try:
-                  import $pkg
-                  print($pkg.__version__)
-              except (ImportError, AttributeError):
-                  print('not installed')
-              "
+              python -c "import sys
+try:
+    import $pkg
+    print($pkg.__version__)
+except (ImportError, AttributeError):
+    print('not installed')
+"
             done
-            
-            # Check for bitsandbytes
-            echo -n "bitsandbytes: "
-            python -c "
-            import sys
-            try:
-                import bitsandbytes
-                print(bitsandbytes.__version__)
-            except (ImportError, AttributeError):
-                print('not installed (quantization will be disabled)')
-            "
             
             # Check if we need to create a local .env file with default settings
             if [ ! -f .env ]; then
               echo "No .env file found, creating from .env.example..."
               cp .env.example .env
               
-              # Disable quantization by default on Linux and Apple Silicon
-              if [ "$(uname -s)" = "Linux" ] || [ "$(uname -sm)" = "Darwin arm64" ]; then
-                echo "Setting MODEL_QUANTIZATION_LEVEL=none in .env for compatibility"
-                sed -i.bak 's/^MODEL_QUANTIZATION_LEVEL=.*/MODEL_QUANTIZATION_LEVEL=none/' .env
-                rm -f .env.bak 2>/dev/null || true
-              fi
+              # Always set quantization to none for better cross-platform compatibility
+              echo "Setting MODEL_QUANTIZATION_LEVEL=none in .env for compatibility"
+              sed -i.bak 's/^MODEL_QUANTIZATION_LEVEL=.*/MODEL_QUANTIZATION_LEVEL=none/' .env
+              rm -f .env.bak 2>/dev/null || true
             fi
             
             echo ""

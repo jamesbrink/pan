@@ -34,6 +34,8 @@ jobs:
           echo 'eval-cache = false' >> ~/.config/nix/nix.conf
           echo 'warn-dirty = false' >> ~/.config/nix/nix.conf
           echo 'accept-flake-config = true' >> ~/.config/nix/nix.conf
+          # This allows using packages that are unsupported on the current system
+          echo 'allow-unsupported-system = true' >> ~/.config/nix/nix.conf
           # Disable binary cache to avoid HTTP 418 errors
           echo 'substitute = false' >> ~/.config/nix/nix.conf
           
@@ -72,6 +74,8 @@ jobs:
           echo 'eval-cache = false' >> ~/.config/nix/nix.conf
           echo 'warn-dirty = false' >> ~/.config/nix/nix.conf
           echo 'accept-flake-config = true' >> ~/.config/nix/nix.conf
+          # This allows using packages that are unsupported on the current system
+          echo 'allow-unsupported-system = true' >> ~/.config/nix/nix.conf
           # Disable binary cache to avoid HTTP 418 errors
           echo 'substitute = false' >> ~/.config/nix/nix.conf
           
@@ -110,6 +114,8 @@ jobs:
           echo 'eval-cache = false' >> ~/.config/nix/nix.conf
           echo 'warn-dirty = false' >> ~/.config/nix/nix.conf
           echo 'accept-flake-config = true' >> ~/.config/nix/nix.conf
+          # This allows using packages that are unsupported on the current system
+          echo 'allow-unsupported-system = true' >> ~/.config/nix/nix.conf
           # Disable binary cache to avoid HTTP 418 errors
           echo 'substitute = false' >> ~/.config/nix/nix.conf
           
