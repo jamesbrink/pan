@@ -45,31 +45,31 @@ jobs:
 
       - name: Lint
         run: |
-          nix develop -c make lint
+          nix --quiet develop -c make lint
         env:
           NIX_CONNECT_TIMEOUT: 60
 
       - name: Type check
         run: |
-          nix develop -c make type
+          nix --quiet develop -c make type
         env:
           NIX_CONNECT_TIMEOUT: 60
 
       - name: Run tests
         run: |
-          nix develop -c make test
+          nix --quiet develop -c make test
         env:
           NIX_CONNECT_TIMEOUT: 60
 
       - name: Run coverage
         run: |
-          nix develop -c make coverage
+          nix --quiet develop -c make coverage
         env:
           NIX_CONNECT_TIMEOUT: 60
 
       - name: Build development environment
         run: |
-          nix develop --command echo "Development environment successfully built"
+          nix --quiet develop --command echo "Development environment successfully built"
         env:
           NIX_CONNECT_TIMEOUT: 60
 
@@ -110,31 +110,31 @@ jobs:
 
       - name: Lint
         run: |
-          nix develop -c make lint
+          nix --quiet develop -c make lint
         env:
           NIX_CONNECT_TIMEOUT: 60
 
       - name: Type check
         run: |
-          nix develop -c make type
+          nix --quiet develop -c make type
         env:
           NIX_CONNECT_TIMEOUT: 60
 
       - name: Run tests
         run: |
-          nix develop -c make test
+          nix --quiet develop -c make test
         env:
           NIX_CONNECT_TIMEOUT: 60
 
       - name: Run coverage
         run: |
-          nix develop -c make coverage
+          nix --quiet develop -c make coverage
         env:
           NIX_CONNECT_TIMEOUT: 60
 
       - name: Build development environment
         run: |
-          nix develop --command echo "Development environment successfully built"
+          nix --quiet develop --command echo "Development environment successfully built"
         env:
           NIX_CONNECT_TIMEOUT: 60
           
@@ -178,4 +178,4 @@ jobs:
           
       - name: Run coverage
         run: |
-          make coverage 
+          make coverage
