@@ -22,6 +22,7 @@
           pytest-cov
           mypy
           types-requests
+          pip  # Ensure pip is available
           
           # Core dependencies
           pyttsx3
@@ -31,6 +32,8 @@
           transformers
           torch
           python-dotenv
+          # Add huggingface_hub for model downloads
+          huggingface-hub
           
           # macOS specific dependencies
           pyobjc-core
@@ -59,6 +62,17 @@
             echo "===== Welcome to PAN Development Environment ====="
             echo "Python version: $(python --version)"
             echo "Packages from nixpkgs/nixos-unstable"
+            echo ""
+            
+            # Create local pip directory if it doesn't exist
+            mkdir -p .pip
+            export PIP_TARGET="$(pwd)/.pip"
+            export PYTHONPATH="$PIP_TARGET:$PYTHONPATH"
+            export PATH="$PIP_TARGET/bin:$PATH"
+            
+            echo "Installing hf_xet for faster model downloads..."
+            pip install --target="$PIP_TARGET" --quiet hf_xet
+            echo "hf_xet successfully installed to .pip directory."
             echo ""
             echo "Development Commands:"
             echo "  make format    - Format code with black and isort"

@@ -98,3 +98,6 @@ htmlcov/
 # Formatter and linter caches
 .black/
 .isort.cfg.cache
+
+# Local pip directory
+.pip/

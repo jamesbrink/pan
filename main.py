@@ -22,15 +22,22 @@ import pan_speech
 curiosity_active = True
 last_interaction_time = time.time()
 last_speech_time = 0
+keyword_activated = False
 
 
 # Load Configuration Settings
 def load_config():
     config = pan_config.get_config()
     global MAX_SHORT_TERM_MEMORY, IDLE_THRESHOLD_SECONDS, MIN_SPEECH_INTERVAL_SECONDS
+    global USE_KEYWORD_ACTIVATION, CONTINUOUS_LISTENING
+    
     MAX_SHORT_TERM_MEMORY = config["conversation"]["max_short_term_memory"]
     IDLE_THRESHOLD_SECONDS = config["conversation"]["idle_threshold_seconds"]
     MIN_SPEECH_INTERVAL_SECONDS = config["conversation"]["min_speech_interval_seconds"]
+    
+    # Load keyword activation settings
+    USE_KEYWORD_ACTIVATION = config["speech_recognition"]["use_keyword_activation"]
+    CONTINUOUS_LISTENING = config["speech_recognition"]["continuous_listening"]
 
 
 load_config()
@@ -215,9 +222,14 @@ if __name__ == "__main__":
     )
     name_connector = ", " if name_explanation else ""
 
+    # Add continuous listening mode information if enabled
+    wake_word_info = ""
+    if USE_KEYWORD_ACTIVATION and CONTINUOUS_LISTENING:
+        wake_word_info = f" I'm in continuous listening mode, so you can activate me anytime by saying '{assistant_name}'."
+    
     try:
         pan_speech.speak(
-            f"{time_greeting}! I'm {assistant_name}{name_connector}{name_explanation}. I can help you search for information, check the weather, get news updates, or just chat. What can I do for you today?"
+            f"{time_greeting}! I'm {assistant_name}{name_connector}{name_explanation}.{wake_word_info} I can help you search for information, check the weather, get news updates, or just chat. What can I do for you today?"
         )
 
         curiosity_thread = threading.Thread(target=curiosity_loop, daemon=True)
@@ -227,6 +239,31 @@ if __name__ == "__main__":
 
         while not exit_requested:
             try:
+                # Use keyword detection if enabled
+                if USE_KEYWORD_ACTIVATION and CONTINUOUS_LISTENING:
+                    # Wait for the wake word (assistant name)
+                    keyword_detected = False
+                    while not keyword_detected and not exit_requested:
+                        try:
+                            keyword_detected = pan_speech.listen_for_keyword()
+                            if keyword_detected:
+                                # Wake word detected, break out of the loop
+                                assistant_name = pan_config.ASSISTANT_NAME
+                                print(f"Wake word '{assistant_name}' detected! Listening for command...")
+                                # Give a brief acknowledgment to let the user know it's listening
+                                pan_speech.speak("Yes?", mood_override="curious")
+                                break
+                            # Brief pause to prevent CPU overuse
+                            time.sleep(0.1)
+                        except KeyboardInterrupt:
+                            cleanup_and_exit()
+                            break
+                    
+                    # If exit was requested during keyword detection, break out
+                    if exit_requested:
+                        break
+                
+                # Now listen for the actual command
                 user_input = listen_with_retries()
                 if exit_requested:
                     break
@@ -244,8 +281,15 @@ if __name__ == "__main__":
                     assistant_name = pan_config.ASSISTANT_NAME
                     print(f"{assistant_name}: {response}")
                     pan_speech.speak(response)
+                    
+                    # Reset the last interaction time
+                    last_interaction_time = time.time()
                 else:
                     print("No valid input detected, listening again...")
+                    
+                    # In continuous listening mode, go back to listening for wake word
+                    if USE_KEYWORD_ACTIVATION and CONTINUOUS_LISTENING:
+                        print(f"Returning to wake word detection mode. Say '{pan_config.ASSISTANT_NAME}' to activate.")
             except KeyboardInterrupt:
                 # This should be caught by the signal handler, but just in case
                 cleanup_and_exit()

@@ -23,12 +23,16 @@ import platform
 
 from pan_config import (
     AMBIENT_NOISE_DURATION,
+    ASSISTANT_NAME,
+    CONTINUOUS_LISTENING,
     DEFAULT_VOICE_RATE,
     DEFAULT_VOICE_VOLUME,
     ENERGY_THRESHOLD,
+    KEYWORD_ACTIVATION_THRESHOLD,
     PHRASE_TIME_LIMIT,
     SPEECH_RECOGNITION_TIMEOUT,
     USE_DYNAMIC_ENERGY_THRESHOLD,
+    USE_KEYWORD_ACTIVATION,
 )
 from pan_emotions import pan_emotions
 
@@ -430,6 +434,86 @@ def recalibrate_microphone():
         return False
     except Exception as e:
         print(f"Unexpected error during microphone recalibration: {e}")
+        return False
+
+
+def listen_for_keyword(timeout=5):
+    """
+    Listen for the wake keyword (assistant name) in ambient audio.
+    
+    Continuously monitors audio input for the assistant's name to be spoken,
+    using a simpler recognition approach for better responsiveness.
+    
+    Args:
+        timeout (int, optional): Timeout for each listening attempt in seconds
+    
+    Returns:
+        bool: True if keyword was detected, False otherwise
+        
+    Raises:
+        KeyboardInterrupt: Propagates keyboard interrupt for proper handling
+    """
+    assistant_name_lower = ASSISTANT_NAME.lower()
+    
+    # Create a recognizer specifically for keyword detection
+    recognizer = sr.Recognizer()
+    
+    # Initialize the microphone
+    try:
+        mic = sr.Microphone()
+    except (OSError, IOError) as e:
+        print(f"Error initializing microphone for keyword detection: {e}")
+        return False
+    
+    try:
+        with mic as source:
+            # Shorter ambient noise adjustment to be more responsive
+            try:
+                recognizer.adjust_for_ambient_noise(source, duration=1.0)
+            except Exception as e:
+                print(f"Error during keyword calibration: {e}")
+            
+            # Use specific settings for keyword detection
+            recognizer.dynamic_energy_threshold = True
+            recognizer.energy_threshold = ENERGY_THRESHOLD
+            
+            try:
+                print("Listening for wake word...")
+                audio = recognizer.listen(source, timeout=timeout, phrase_time_limit=3)
+            except sr.WaitTimeoutError:
+                return False
+            except KeyboardInterrupt:
+                print("\nKeyboard interrupt detected during keyword listening")
+                raise
+            except Exception as e:
+                print(f"Error during keyword listening: {e}")
+                return False
+        
+        try:
+            # Use Google's speech recognition for better accuracy
+            text = recognizer.recognize_google(audio).lower()
+            print(f"Heard: {text}")
+            
+            # Check if the assistant name is in the recognized text
+            if assistant_name_lower in text:
+                print(f"Wake word '{ASSISTANT_NAME}' detected!")
+                return True
+            
+            return False
+        except sr.UnknownValueError:
+            # This is normal for keyword detection - silent periods, unclear speech, etc.
+            return False
+        except sr.RequestError as e:
+            print(f"Could not request results for keyword detection; {e}")
+            return False
+        except Exception as e:
+            print(f"Unexpected error during keyword recognition: {e}")
+            return False
+    except KeyboardInterrupt:
+        print("\nKeyboard interrupt detected during keyword recognition")
+        raise
+    except Exception as e:
+        print(f"Unexpected error in keyword recognition: {e}")
         return False
 
 

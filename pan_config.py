@@ -67,6 +67,11 @@ ENERGY_THRESHOLD = int(os.getenv("ENERGY_THRESHOLD", "300"))
 SPEECH_RECOGNITION_TIMEOUT = int(os.getenv("SPEECH_RECOGNITION_TIMEOUT", "5"))
 PHRASE_TIME_LIMIT = int(os.getenv("PHRASE_TIME_LIMIT", "10"))
 
+# Keyword detection settings
+USE_KEYWORD_ACTIVATION = os.getenv("USE_KEYWORD_ACTIVATION", "True").lower() == "true"
+KEYWORD_ACTIVATION_THRESHOLD = float(os.getenv("KEYWORD_ACTIVATION_THRESHOLD", "0.6"))
+CONTINUOUS_LISTENING = os.getenv("CONTINUOUS_LISTENING", "True").lower() == "true"
+
 
 def get_config():
     """
@@ -110,6 +115,9 @@ def get_config():
             "energy_threshold": ENERGY_THRESHOLD,
             "speech_recognition_timeout": SPEECH_RECOGNITION_TIMEOUT,
             "phrase_time_limit": PHRASE_TIME_LIMIT,
+            "use_keyword_activation": USE_KEYWORD_ACTIVATION,
+            "keyword_activation_threshold": KEYWORD_ACTIVATION_THRESHOLD,
+            "continuous_listening": CONTINUOUS_LISTENING,
         },
     }
 

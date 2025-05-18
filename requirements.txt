@@ -6,6 +6,7 @@ requests>=2.25.1
 transformers>=4.28.0
 torch>=2.0.0
 python-dotenv>=1.0.0
+huggingface-hub[hf_xet]>=0.30.0
 
 # macOS specific dependencies
 pyobjc>=9.0.1; sys_platform == 'darwin'
