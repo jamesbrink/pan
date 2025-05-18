@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  nix-build:
+    name: Build and Test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v9
+        with:
+          logger: pretty
+
+      - name: Enable Nix flakes
+        uses: DeterminateSystems/magic-nix-cache-action@v2
+
+      - name: Lint
+        run: |
+          nix develop -c make lint
+
+      - name: Type check
+        run: |
+          nix develop -c make type
+
+      - name: Run tests
+        run: |
+          nix develop -c make test
+
+      # Optional: Run coverage and upload
+      - name: Run coverage
+        run: |
+          nix develop -c make coverage
+
+      # Optional: Add a step to build and cache any dependencies
+      - name: Build development environment
+        run: |
+          nix develop --command echo "Development environment successfully built" 
