@@ -80,7 +80,12 @@ class SpeakManager:
         self.speech_count = 0
         self.speaking_event = threading.Event()
         self.exit_requested = False
-        self.last_restart_time = 0  # Track last engine restart time
+        
+        # TTS reliability tracking
+        self.last_restart_time = time.time()  # Track last engine restart time
+        self.tts_attempt_count = 0  # Track consecutive TTS failures
+        self.last_tts_attempt_time = time.time()  # Time of last TTS attempt
+        
         self.thread = threading.Thread(target=self._worker, daemon=True)
         self.thread.start()
 
@@ -230,98 +235,141 @@ class SpeakManager:
         self.engine = DummyEngine()
         print("[SpeakManager] Using fallback dummy TTS engine")
 
+    def _try_system_command_tts(self, text):
+        """
+        Try to use system commands for TTS as a more reliable fallback.
+        
+        Args:
+            text (str): The text to speak
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            if is_macos:
+                # Use macOS 'say' command which is very reliable
+                import subprocess
+                subprocess.run(["say", text], check=True)
+                return True
+            elif is_linux:
+                # Try espeak on Linux
+                import subprocess
+                subprocess.run(["espeak", text], check=True)
+                return True
+            elif is_windows and self.sapi_engine:
+                # Already handled in _speak_chunk
+                return False
+            return False
+        except Exception as e:
+            print(f"System command TTS failed: {e}")
+            return False
+
     def _speak_chunk(self, chunk, mood):
         """
         Speak a single chunk of text with the given mood.
 
-        Uses platform-specific optimizations and falls back if needed.
+        Uses platform-specific optimizations and fallbacks as needed.
 
         Args:
             chunk (str): The text chunk to speak
             mood (str): The emotional mood to apply to the voice
         """
+        # Track attempts to avoid infinite retry loops
+        if not hasattr(self, 'tts_attempt_count'):
+            self.tts_attempt_count = 0
+        
+        # Reset attempt count if it's been a while
+        if hasattr(self, 'last_tts_attempt_time'):
+            if time.time() - self.last_tts_attempt_time > 10:
+                self.tts_attempt_count = 0
+        self.last_tts_attempt_time = time.time()
+        
+        # Increment attempt count
+        self.tts_attempt_count += 1
+        
+        # If we've tried several times, go directly to fallback
+        if self.tts_attempt_count > 3:
+            print(f"[SpeakManager] Too many failed TTS attempts, using system fallback")
+            if self._try_system_command_tts(chunk):
+                self.tts_attempt_count = 0
+                return
+            else:
+                print(f"[SpeakManager] TTS Fallback (text only): {chunk}")
+                self.tts_attempt_count = 0
+                return
+
         # Use Windows SAPI if available
-        if self.sapi_engine:
+        if is_windows and self.sapi_engine:
             try:
                 print("[SpeakManager] Using Windows SAPI for TTS chunk.")
                 self.sapi_engine.Speak(chunk)
+                self.tts_attempt_count = 0  # Reset on success
                 return
             except (AttributeError, RuntimeError) as sapi_error:
                 print(f"SAPI TTS failed: {sapi_error}")
+                # Fall through to next attempt
 
-        # macOS-specific optimizations
-        if is_macos:
-            try:
-                # We already set the voice parameters in the worker, no need to call set_voice_by_mood each time
-                # This avoids the overhead of changing properties for each chunk
+        # Try with our regular engine
+        try:
+            if hasattr(self, "engine") and self.engine is not None:
+                # Add the text to the engine
                 self.engine.say(chunk)
                 
-                # Handle the "run loop already started" error that can occur when
-                # multiple speech requests come in quickly
+                # Try to run the speech
                 try:
                     self.engine.runAndWait()
+                    self.tts_attempt_count = 0  # Reset on success
+                    return
                 except RuntimeError as loop_error:
                     if "run loop already started" in str(loop_error):
-                        print("[SpeakManager] Detected run loop error, using alternative approach")
-                        # Give a small delay to let the previous runAndWait finish
-                        time.sleep(0.5)
-                        # Use a safer approach for TTS when run loop is already started
-                        try:
-                            # Instead of restarting the engine, create a fallback text output
-                            print(f"[SpeakManager] TTS Fallback: {chunk}")
-                            # Wait a moment to let any pending speech complete
-                            time.sleep(1.0)
-                            # Only try to init a new engine if we've waited long enough
-                            if hasattr(self, "last_restart_time"):
-                                time_since_restart = time.time() - self.last_restart_time
-                                if time_since_restart > 5.0:  # Only restart every 5 seconds
-                                    self._init_engine()
-                                    self.last_restart_time = time.time()
-                            else:
-                                self.last_restart_time = time.time()
-                        except Exception as restart_error:
-                            print(f"TTS fallback approach failed: {restart_error}")
-                    else:
-                        print(f"macOS TTS runAndWait error: {loop_error}")
-            except (AttributeError, RuntimeError) as tts_error:
-                print(f"macOS TTS error in chunk: {tts_error}")
-                traceback.print_exc()
-        else:
-            # For non-macOS platforms
-            try:
-                # We set this in the worker, but some engines might need it per chunk
-                self.set_voice_by_mood(mood)
-                self.engine.say(chunk)
-                
-                # Handle the "run loop already started" error
-                try:
-                    self.engine.runAndWait()
-                except RuntimeError as loop_error:
-                    if "run loop already started" in str(loop_error):
-                        print("[SpeakManager] Detected run loop error, using alternative approach")
-                        # Give a small delay to let the previous runAndWait finish
-                        time.sleep(0.5)
-                        # Use a safer approach for TTS when run loop is already started
-                        try:
-                            # Instead of restarting the engine, create a fallback text output
-                            print(f"[SpeakManager] TTS Fallback: {chunk}")
-                            # Wait a moment to let any pending speech complete
-                            time.sleep(1.0)
-                            # Only try to init a new engine if we've waited long enough
-                            if hasattr(self, "last_restart_time"):
-                                time_since_restart = time.time() - self.last_restart_time
-                                if time_since_restart > 5.0:  # Only restart every 5 seconds
-                                    self._init_engine()
-                                    self.last_restart_time = time.time()
-                            else:
-                                self.last_restart_time = time.time()
-                        except Exception as restart_error:
-                            print(f"TTS fallback approach failed: {restart_error}")
+                        print("[SpeakManager] Detected run loop error, trying system fallback")
+                        # Try system command TTS which is more reliable
+                        if self._try_system_command_tts(chunk):
+                            self.tts_attempt_count = 0  # Reset on success
+                            return
                     else:
                         print(f"TTS runAndWait error: {loop_error}")
-            except (AttributeError, RuntimeError) as tts_error:
-                print(f"TTS error in chunk: {tts_error}")
-                traceback.print_exc()
+            else:
+                print("[SpeakManager] Engine not available")
+        except Exception as tts_error:
+            print(f"TTS error: {tts_error}")
+        
+        # If we get here, try to recreate the engine and try again, but only if 
+        # it's been more than 5 seconds since our last engine init
+        current_time = time.time()
+        should_reinit = False
+        
+        if hasattr(self, "last_restart_time"):
+            if current_time - self.last_restart_time > 5.0:
+                should_reinit = True
+        else:
+            should_reinit = True
+            
+        if should_reinit:
+            print("[SpeakManager] Reinitializing speech engine")
+            try:
+                self._init_engine()
+                self.last_restart_time = current_time
+                
+                # Try one more time with the new engine
+                if hasattr(self, "engine") and self.engine is not None:
+                    self.set_voice_by_mood(mood)
+                    self.engine.say(chunk)
+                    try:
+                        self.engine.runAndWait()
+                        self.tts_attempt_count = 0  # Reset on success
+                        return
+                    except Exception as retry_error:
+                        print(f"TTS retry failed: {retry_error}")
+            except Exception as init_error:
+                print(f"Engine reinitialization failed: {init_error}")
+        
+        # If all else fails, use system TTS or just print
+        if self._try_system_command_tts(chunk):
+            self.tts_attempt_count = 0  # Reset on success
+        else:
+            # Last resort: just print the text
+            print(f"[SpeakManager] TTS Fallback (text only): {chunk}")
 
     def _worker(self):
         """
