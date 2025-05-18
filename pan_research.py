@@ -56,7 +56,7 @@ def google_search(query):
     return "Error: Could not connect to Google."
 
 # Weather Functionality (OpenWeatherMap API)
-def get_weather(city="Kelso", country_code="US"):
+def fetch_weather(city="Kelso", country_code="US"):
     api_key = pan_settings.pan_settings.OPENWEATHERMAP_API_KEY
     if not api_key:
         return "Weather API key is missing in settings."
@@ -74,8 +74,8 @@ def get_weather(city="Kelso", country_code="US"):
     except requests.RequestException:
         return "Error: Could not connect to the weather service."
 
-# Local News Functionality (NewsAPI)
-def get_local_news():
+# News Functionality (NewsAPI)
+def fetch_news():
     api_key = pan_settings.pan_settings.NEWS_API_KEY
     if not api_key:
         return "News API key is missing in settings."

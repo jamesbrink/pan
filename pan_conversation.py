@@ -1,9 +1,10 @@
 import threading
 from pan_speech import speak, stop_speaking
 from pan_ai import pan_ai  # Ensure pan_ai is properly imported
+from pan_research import fetch_news, fetch_weather
 
 # Context Memory (Session-based)
-conversation_history = []
+conversation_history = []  # Only stores PAN's responses, not user input
 MAX_MEMORY_LENGTH = 10  # Number of exchanges before auto-summarization
 stop_generation_event = threading.Event()  # Event to interrupt response generation
 
@@ -20,19 +21,43 @@ def respond(user_input, user_id):
         print("[PAN] Response generation and speech stopped.")
         return "Okay, I've stopped."
 
+    # Detect Commands (Weather, News)
+    if "weather" in user_input_lower:
+        return handle_weather()
+    if "news" in user_input_lower:
+        return handle_news()
+
     # Clear the stop event to allow fresh response generation
     stop_generation_event.clear()
     
     return gpt_neo_conversation(user_input)
 
+def handle_weather():
+    """Fetch and speak the weather."""
+    try:
+        weather_info = fetch_weather()
+        response = f"The current weather is: {weather_info}"
+        speak(response)
+        return response
+    except Exception as e:
+        print(f"[PAN ERROR] Weather failed: {e}")
+        return "Sorry, I couldn't get the weather information."
+
+def handle_news():
+    """Fetch and speak the news."""
+    try:
+        news_info = fetch_news()
+        response = f"Here are the latest news headlines: {news_info}"
+        speak(response)
+        return response
+    except Exception as e:
+        print(f"[PAN ERROR] News failed: {e}")
+        return "Sorry, I couldn't get the latest news."
+
 def gpt_neo_conversation(prompt):
     global conversation_history, stop_generation_event
 
-    # Auto-Summarize if memory is too long
-    if len(conversation_history) > MAX_MEMORY_LENGTH:
-        summarize_memory()
-
-    # Generate response with context memory
+    # Only use PAN's responses for context
     context_text = "\n".join(conversation_history)
     print("Generating response... (Say 'stop' to interrupt)")
 
@@ -55,8 +80,8 @@ def generate_response_thread(context_text, prompt):
     global conversation_history, stop_generation_event
 
     try:
-        # Generate response using context but not repeating user input
-        response = pan_ai.generate_response(context_text + "\nUser: " + prompt + "\nPAN:", max_new_tokens=150)
+        # Generate response using PAN's context only (no user text)
+        response = pan_ai.generate_response(context_text + "\nPAN:", max_new_tokens=150)
         
         # If the stop event is triggered, abandon response
         if stop_generation_event.is_set():
@@ -65,6 +90,11 @@ def generate_response_thread(context_text, prompt):
 
         # Store only PAN's response in memory
         conversation_history.append(f"PAN: {response}")
+
+        # Maintain memory length
+        if len(conversation_history) > MAX_MEMORY_LENGTH:
+            conversation_history = conversation_history[-MAX_MEMORY_LENGTH:]
+
         speak(response)  # Immediately speak the response (interruptible)
     except Exception as e:
         print(f"[PAN ERROR] Failed to generate response: {e}")
