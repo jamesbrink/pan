@@ -62,16 +62,8 @@ class PanAI:
                     )
                     print(f"Using {bits}-bit quantization for model loading")
                 except (ImportError, AttributeError):
-                    print("Warning: bitsandbytes not available or not supported, using 8-bit quantization instead")
-                    try:
-                        # Try simple 8-bit loading as fallback
-                        quantization_config = BitsAndBytesConfig(
-                            load_in_8bit=True
-                        )
-                        print("Using 8-bit quantization as fallback")
-                    except Exception as e:
-                        print(f"Warning: Quantization not supported, falling back to standard loading: {e}")
-                        self.quantization_level = "none"
+                    print("Warning: bitsandbytes not available or not supported, falling back to standard loading")
+                    self.quantization_level = "none"
         except Exception as e:
             print(f"Warning: Error setting up quantization, falling back to standard loading: {e}")
             self.quantization_level = "none"
