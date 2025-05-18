@@ -1,25 +1,26 @@
 # Core dependencies
-pyttsx3>=2.90
-SpeechRecognition>=3.8.1
-pyaudio>=0.2.11
-requests>=2.25.1
-transformers>=4.28.0
-torch>=2.0.0
-python-dotenv>=1.0.0
+pyttsx3>=2.98
+SpeechRecognition>=3.14.3
+pyaudio>=0.2.14
+requests>=2.31.0
+transformers>=4.51.3
+torch>=2.7.0
+python-dotenv>=1.1.0
+vosk>=0.3.45
 
 # macOS specific dependencies
-pyobjc>=9.0.1; sys_platform == 'darwin'
-pyobjc-core>=9.0.1; sys_platform == 'darwin'
+pyobjc>=11.0; sys_platform == 'darwin'
+pyobjc-core>=11.0; sys_platform == 'darwin'
 
 # Utility packages
-numpy>=1.22.0
-python-dateutil>=2.8.2
+numpy>=2.2.6
+python-dateutil>=2.9.0.post0
 
 # Development dependencies (optional)
-black>=23.1.0
-pylint>=2.15.0
-isort>=5.12.0
-pre-commit>=3.0.0
-pytest>=7.0.0
+black>=24.1.1
+pylint>=3.3.6
+isort>=6.0.1
+pre-commit>=4.2.0
+pytest>=7.2.0
 pytest-cov>=4.0.0
-mypy>=1.0.0
+mypy>=1.2.0
