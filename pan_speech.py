@@ -80,6 +80,7 @@ class SpeakManager:
         self.speech_count = 0
         self.speaking_event = threading.Event()
         self.exit_requested = False
+        self.last_restart_time = 0  # Track last engine restart time
         self.thread = threading.Thread(target=self._worker, daemon=True)
         self.thread.start()
 
@@ -264,14 +265,22 @@ class SpeakManager:
                         print("[SpeakManager] Detected run loop error, using alternative approach")
                         # Give a small delay to let the previous runAndWait finish
                         time.sleep(0.5)
-                        # Try a simple engine restart if needed
+                        # Use a safer approach for TTS when run loop is already started
                         try:
-                            self._init_engine()
-                            self.set_voice_by_mood(mood)
-                            self.engine.say(chunk)
-                            self.engine.runAndWait()
+                            # Instead of restarting the engine, create a fallback text output
+                            print(f"[SpeakManager] TTS Fallback: {chunk}")
+                            # Wait a moment to let any pending speech complete
+                            time.sleep(1.0)
+                            # Only try to init a new engine if we've waited long enough
+                            if hasattr(self, "last_restart_time"):
+                                time_since_restart = time.time() - self.last_restart_time
+                                if time_since_restart > 5.0:  # Only restart every 5 seconds
+                                    self._init_engine()
+                                    self.last_restart_time = time.time()
+                            else:
+                                self.last_restart_time = time.time()
                         except Exception as restart_error:
-                            print(f"Engine restart failed: {restart_error}")
+                            print(f"TTS fallback approach failed: {restart_error}")
                     else:
                         print(f"macOS TTS runAndWait error: {loop_error}")
             except (AttributeError, RuntimeError) as tts_error:
@@ -292,14 +301,22 @@ class SpeakManager:
                         print("[SpeakManager] Detected run loop error, using alternative approach")
                         # Give a small delay to let the previous runAndWait finish
                         time.sleep(0.5)
-                        # Try a simple engine restart if needed
+                        # Use a safer approach for TTS when run loop is already started
                         try:
-                            self._init_engine()
-                            self.set_voice_by_mood(mood)
-                            self.engine.say(chunk)
-                            self.engine.runAndWait()
+                            # Instead of restarting the engine, create a fallback text output
+                            print(f"[SpeakManager] TTS Fallback: {chunk}")
+                            # Wait a moment to let any pending speech complete
+                            time.sleep(1.0)
+                            # Only try to init a new engine if we've waited long enough
+                            if hasattr(self, "last_restart_time"):
+                                time_since_restart = time.time() - self.last_restart_time
+                                if time_since_restart > 5.0:  # Only restart every 5 seconds
+                                    self._init_engine()
+                                    self.last_restart_time = time.time()
+                            else:
+                                self.last_restart_time = time.time()
                         except Exception as restart_error:
-                            print(f"Engine restart failed: {restart_error}")
+                            print(f"TTS fallback approach failed: {restart_error}")
                     else:
                         print(f"TTS runAndWait error: {loop_error}")
             except (AttributeError, RuntimeError) as tts_error:

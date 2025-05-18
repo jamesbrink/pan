@@ -20,9 +20,9 @@ class PanSettings:
         self.OPENWEATHERMAP_API_KEY = os.getenv("OPENWEATHERMAP_API_KEY")
         self.NEWS_API_KEY = os.getenv("NEWS_API_KEY")
 
-        # Default Location Settings
-        self.DEFAULT_CITY = "Kelso"
-        self.DEFAULT_COUNTRY_CODE = "US"
+        # Default Location Settings (Loaded from .env)
+        self.DEFAULT_CITY = os.getenv("DEFAULT_CITY", "Kelso")
+        self.DEFAULT_COUNTRY_CODE = os.getenv("DEFAULT_COUNTRY_CODE", "US")
 
         # Conversation Mode (Advanced LLM)
         self.USE_GPT2_FOR_CONVERSATION = (
