@@ -17,9 +17,9 @@
           };
         };
         
-        # Try to get bitsandbytes for quantization - we wrap this in a try-catch block
-        # so that it will still work even if bitsandbytes is not available on this system
-        bitsandbytesAvailable = builtins.tryEval (builtins.deepSeq pkgs.python312.pkgs.bitsandbytes true);
+        # Check if bitsandbytes is available in the current system's packages
+        # We use a simpler approach to avoid deepSeq warnings
+        hasBitsAndBytes = builtins.hasAttr "bitsandbytes" pkgs.python312.pkgs;
         
         pythonEnv = pkgs.python312.withPackages (ps: with ps; [
           # Development tools
@@ -42,8 +42,8 @@
           python-dotenv
           # Add huggingface_hub for model downloads
           huggingface-hub
-          # Add bitsandbytes for model quantization, if available
-          (if bitsandbytesAvailable.success then bitsandbytes else null)
+          # Add bitsandbytes for model quantization, if available on this system
+          (if hasBitsAndBytes then bitsandbytes else null)
           accelerate
           
           # macOS specific dependencies
@@ -131,7 +131,7 @@ except (ImportError, AttributeError):
               cp .env.example .env
               
               # Check if bitsandbytes is available and update the .env file accordingly
-              # Simply create a temp script to check for bitsandbytes
+              # Try to import it first to see if it's actually available at runtime
               echo '
 import sys
 try:
@@ -141,7 +141,11 @@ except ImportError:
     exit(1)
 ' > /tmp/check_bnb.py
               
-              if ! python /tmp/check_bnb.py || [ "$(uname -sm)" = "Darwin arm64" ]; then
+              # Set quantization to none if:
+              # 1. bitsandbytes fails to import, or
+              # 2. We're on Apple Silicon (which has known compatibility issues), or
+              # 3. We're on Linux (which may have different compatibility issues)
+              if ! python /tmp/check_bnb.py || [ "$(uname -sm)" = "Darwin arm64" ] || [ "$(uname -s)" = "Linux" ]; then
                 echo "bitsandbytes not available or running on Apple Silicon, setting MODEL_QUANTIZATION_LEVEL=none in .env"
                 # Use simple approach that works everywhere
                 cp .env .env.tmp
