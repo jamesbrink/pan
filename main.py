@@ -215,8 +215,8 @@ def cleanup_and_exit():
 
         # Small delay to allow thread cleanup
         time.sleep(0.2)
-    except Exception as e:  # pylint: disable=broad-exception-caught
-        print(f"Error during speech engine cleanup: {e}")
+    except Exception as cleanup_error:  # pylint: disable=broad-exception-caught
+        print(f"Error during speech engine cleanup: {cleanup_error}")
 
     print("Goodbye!")
     sys.exit(0)
@@ -263,8 +263,8 @@ def check_macos_microphone_permissions():
             )
             print("until you grant microphone permissions!")
             print("=" * 60 + "\n")
-    except Exception as e:  # pylint: disable=broad-exception-caught
-        print(f"Error checking microphone permissions: {e}")
+    except Exception as permission_error:  # pylint: disable=broad-exception-caught
+        print(f"Error checking microphone permissions: {permission_error}")
 
 
 if __name__ == "__main__":
