@@ -190,21 +190,42 @@ Configuration is managed through environment variables loaded from the `.env` fi
 DATABASE_PATH=pan_memory.db
 
 # API keys
-WEATHER_API_KEY=your_api_key
+OPENWEATHERMAP_API_KEY=your_api_key
 NEWS_API_KEY=your_api_key
+
+# AI model settings
+LLM_MODEL_NAME=gpt2
+CONVERSATION_MODEL_NAME=EleutherAI/gpt-j-6B
+MAX_MEMORY_LENGTH=10
 
 # Location settings
 DEFAULT_CITY=Kelso
 DEFAULT_COUNTRY_CODE=US
 
+# Assistant settings
+ASSISTANT_NAME=Pan
+
 # Voice settings
 DEFAULT_VOICE_RATE=160
 DEFAULT_VOICE_VOLUME=0.9
+MACOS_VOICE_RATE=190
 
 # Conversation settings
 MAX_SHORT_TERM_MEMORY=10
 IDLE_THRESHOLD_SECONDS=300
 MIN_SPEECH_INTERVAL_SECONDS=15
+
+# Speech recognition settings
+AMBIENT_NOISE_DURATION=3.0
+USE_DYNAMIC_ENERGY_THRESHOLD=True
+ENERGY_THRESHOLD=300
+SPEECH_RECOGNITION_TIMEOUT=5
+PHRASE_TIME_LIMIT=10
+
+# Keyword activation settings
+USE_KEYWORD_ACTIVATION=True
+KEYWORD_ACTIVATION_THRESHOLD=0.6
+CONTINUOUS_LISTENING=True
 ```
 
 Environment variables are accessed through the `pan_config.py` module.
