@@ -9,6 +9,8 @@ transformers library to load and run inference with pre-trained language models.
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
+import pan_config
+
 
 class PanAI:
     """
@@ -22,10 +24,10 @@ class PanAI:
         """
         Initialize the language model and tokenizer.
 
-        Loads the pre-trained model and tokenizer, and sets up the appropriate
-        device (GPU if available, otherwise CPU) for inference.
+        Loads the pre-trained model and tokenizer from environment settings,
+        and sets up the appropriate device (GPU if available, otherwise CPU) for inference.
         """
-        self.model_name = "gpt2"  # You can change this to any compatible model
+        self.model_name = pan_config.LLM_MODEL_NAME
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
         self.model = AutoModelForCausalLM.from_pretrained(self.model_name)
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

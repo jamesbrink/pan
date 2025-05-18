@@ -11,6 +11,7 @@ PAN is a personality-based voice recognition digital assistant that combines emo
 - **Web Research**: Gather information from the internet when needed
 - **User Recognition**: Adapt to different users and store preferences
 - **Autonomous Learning**: Curiosity-driven research when idle
+- **Configurable AI Models**: Easily switch between different language models via environment variables
 
 ## Getting Started
 
@@ -92,7 +93,7 @@ PAN is a personality-based voice recognition digital assistant that combines emo
    python main.py
    ```
 
-### Required API Keys
+### Required API Keys and Configuration
 
 PAN requires the following API keys to access external services:
 
@@ -106,6 +107,20 @@ PAN requires the following API keys to access external services:
    - Create a free API key
    - Add to your `.env` file as `NEWS_API_KEY=your_key_here`
 
+### AI Models Configuration
+
+PAN supports configurable language models for different purposes:
+
+1. **General AI Model** (`LLM_MODEL_NAME`)
+   - Default: "gpt2"
+   - Used for general language processing tasks
+   - Can be changed to any Hugging Face model compatible with AutoModelForCausalLM
+
+2. **Conversation Model** (`CONVERSATION_MODEL_NAME`)
+   - Default: "EleutherAI/gpt-j-6B" 
+   - Used specifically for conversation processing
+   - Larger models provide better responses but require more resources
+
 Example `.env` file:
 ```
 # Database settings
@@ -114,6 +129,11 @@ DATABASE_PATH=pan_memory.db
 # API keys
 OPENWEATHERMAP_API_KEY=abc123yourapikeyhere
 NEWS_API_KEY=xyz789yourapikeyhere
+
+# AI model settings
+LLM_MODEL_NAME=gpt2
+CONVERSATION_MODEL_NAME=EleutherAI/gpt-j-6B
+MAX_MEMORY_LENGTH=10
 
 # Location settings
 DEFAULT_CITY=Kelso
@@ -260,7 +280,7 @@ PAN is built with a modular architecture:
 - **Speech Interface** (`pan_speech.py`): Text-to-speech with emotion modulation and speech recognition
 - **Research Capabilities** (`pan_research.py`): Web search, weather/news APIs, opinion management
 - **User Management** (`pan_users.py`): User identification and preference tracking
-- **AI Response** (`pan_ai.py`): Natural language generation and response formatting
+- **AI Response** (`pan_ai.py`): Natural language generation and response formatting using configurable language models
 - **Configuration** (`pan_config.py`): Centralized environment variable management
 
 ### Platform-Specific Considerations

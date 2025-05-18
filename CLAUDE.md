@@ -210,5 +210,5 @@ MIN_SPEECH_INTERVAL_SECONDS=15
 Environment variables are accessed through the `pan_config.py` module.
 
 ## Quick Command Reminder
-
+### Important!
 - Remember to use `nix develop -c <your command>` to run any python tasks

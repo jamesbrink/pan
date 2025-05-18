@@ -2,21 +2,24 @@
 Speech Interface Module for PAN (Cross-Platform)
 
 This module provides text-to-speech and speech recognition capabilities for PAN.
-It supports both Windows (SAPI) and Linux (espeak) for TTS, and provides robust 
+It supports both Windows (SAPI) and Linux (espeak) for TTS, and provides robust
 speech recognition with Google Speech API.
 """
 
-import pyttsx3
 import queue
 import threading
 import time
 import traceback
 import warnings
 
+import pyttsx3
+
 # Suppress deprecation warnings for speech_recognition library dependencies
 with warnings.catch_warnings():
     warnings.filterwarnings("ignore", category=DeprecationWarning)
     import speech_recognition as sr
+
+import platform
 
 from pan_config import (
     AMBIENT_NOISE_DURATION,
@@ -28,8 +31,6 @@ from pan_config import (
     USE_DYNAMIC_ENERGY_THRESHOLD,
 )
 from pan_emotions import pan_emotions
-
-import platform
 
 # Detect OS
 is_windows = platform.system().lower() == "windows"
@@ -74,6 +75,7 @@ class SpeakManager:
         self.lock = threading.Lock()
         self.speech_count = 0
         self.speaking_event = threading.Event()
+        self.exit_requested = False
         self.thread = threading.Thread(target=self._worker, daemon=True)
         self.thread.start()
 
@@ -82,30 +84,62 @@ class SpeakManager:
         else:
             self.sapi_engine = None
 
+    def stop(self):
+        """
+        Stop speech processing cleanly.
+
+        Stops any ongoing speech and signals the background worker thread to exit.
+        """
+        self.exit_requested = True
+
+        # Clear queue to prevent further processing
+        while not self.queue.empty():
+            try:
+                self.queue.get_nowait()
+                self.queue.task_done()
+            except queue.Empty:
+                break
+
+        # Stop ongoing speech
+        with self.lock:
+            try:
+                if hasattr(self.engine, "stop"):
+                    self.engine.stop()
+            except Exception as e:
+                print(f"Error stopping speech engine: {e}")
+
+        # Clear speaking flag
+        self.speaking_event.clear()
+
     def _init_engine(self):
         """Initialize the pyttsx3 TTS engine with platform-specific optimizations."""
         print("[SpeakManager] Initializing pyttsx3 engine")
-        
+
         try:
             if is_macos:
                 # On macOS, use the default NSS driver and increase rate
                 self.engine = pyttsx3.init()
                 # Get available voices and try to find a high-quality voice
-                voices = self.engine.getProperty('voices')
+                voices = self.engine.getProperty("voices")
                 for voice in voices:
                     # Look for higher quality voices - typically ones with "premium" or "enhanced" in the name
-                    if voice.name.lower().find('premium') != -1 or voice.name.lower().find('enhanced') != -1:
-                        self.engine.setProperty('voice', voice.id)
-                        print(f"[SpeakManager] Using enhanced macOS voice: {voice.name}")
+                    if (
+                        voice.name.lower().find("premium") != -1
+                        or voice.name.lower().find("enhanced") != -1
+                    ):
+                        self.engine.setProperty("voice", voice.id)
+                        print(
+                            f"[SpeakManager] Using enhanced macOS voice: {voice.name}"
+                        )
                         break
             elif is_windows:
-                self.engine = pyttsx3.init(driverName='sapi5')
+                self.engine = pyttsx3.init(driverName="sapi5")
                 if has_sapi:
                     self.sapi_engine = win32com.client.Dispatch("SAPI.SpVoice")
                 else:
                     self.sapi_engine = None
             elif is_linux:
-                self.engine = pyttsx3.init(driverName='espeak')
+                self.engine = pyttsx3.init(driverName="espeak")
             else:
                 self.engine = pyttsx3.init()  # Default cross-platform
         except (ImportError, RuntimeError, ValueError) as e:
@@ -131,18 +165,18 @@ class SpeakManager:
             list: A list of text chunks optimized for the current platform
         """
         import re
-        
+
         # Use platform-specific chunk sizes
         # macOS NSSpeechSynthesizer performs better with larger chunks
         chunk_size = 300 if is_macos else MAX_CHUNK_LENGTH
-        
+
         # Split on sentence boundaries
         sentences = re.split(r"(?<=[.!?]) +", text)
-        
+
         # Fast path for short text (no chunking needed)
         if len(text) <= chunk_size:
             return [text]
-            
+
         chunks = []
         current = ""
         for sentence in sentences:
@@ -152,7 +186,7 @@ class SpeakManager:
                 # If we have content to add, add it
                 if current:
                     chunks.append(current.strip())
-                    
+
                 # If the sentence itself is too long, we need to split it further
                 if len(sentence) > chunk_size:
                     # Split on commas and other natural pauses for very long sentences
@@ -171,15 +205,22 @@ class SpeakManager:
                     current = sentence + " "
         if current:
             chunks.append(current.strip())
-            
+
         return chunks
 
     def _create_dummy_engine(self):
         class DummyEngine:
-            def say(self, text): print(f"[TTS FALLBACK] Speaking: {text}")
-            def runAndWait(self): pass
-            def stop(self): pass
-            def setProperty(self, prop, value): pass
+            def say(self, text):
+                print(f"[TTS FALLBACK] Speaking: {text}")
+
+            def runAndWait(self):
+                pass
+
+            def stop(self):
+                pass
+
+            def setProperty(self, prop, value):
+                pass
 
         self.engine = DummyEngine()
         print("[SpeakManager] Using fallback dummy TTS engine")
@@ -202,7 +243,7 @@ class SpeakManager:
                 return
             except (AttributeError, RuntimeError) as sapi_error:
                 print(f"SAPI TTS failed: {sapi_error}")
-        
+
         # macOS-specific optimizations
         if is_macos:
             try:
@@ -229,39 +270,64 @@ class SpeakManager:
         Background worker that processes speech tasks from the queue.
 
         Runs in a separate thread to avoid blocking the main program
-        while speech synthesis is occurring.
+        while speech synthesis is occurring. Checks for exit_requested
+        flag to allow clean shutdown.
         """
-        while True:
-            text, mood = self.queue.get()
+        while not self.exit_requested:
             try:
-                with self.lock:
-                    # Don't reinitialize the engine for every speech - this is a major
-                    # performance issue especially on macOS
-                    # Only stop the engine if it's already speaking
-                    if hasattr(self.engine, 'isBusy') and self.engine.isBusy():
-                        self.engine.stop()
-                    
-                    print("[SpeakManager] Speaking started")
-                    self.speaking_event.set()
+                # Use a timeout to periodically check for exit requests
+                try:
+                    text, mood = self.queue.get(timeout=0.5)
+                except queue.Empty:
+                    # No items in queue, just check for exit_requested and continue
+                    continue
 
-                    # Set voice parameters once before speaking
-                    self.set_voice_by_mood(mood)
-                    
-                    chunks = self._chunk_text(text)
-                    for chunk in chunks:
-                        self._speak_chunk(chunk, mood)
-                        # Reduced sleep time for macOS to improve responsiveness
-                        time.sleep(0.01 if is_macos else 0.05)
+                # If we got a task but exit was requested, skip processing
+                if self.exit_requested:
+                    self.queue.task_done()
+                    continue
 
-                    self.speech_count += 1
-                    print("[SpeakManager] Speaking ended")
+                try:
+                    with self.lock:
+                        # Don't reinitialize the engine for every speech - this is a major
+                        # performance issue especially on macOS
+                        # Only stop the engine if it's already speaking
+                        if hasattr(self.engine, "isBusy") and self.engine.isBusy():
+                            self.engine.stop()
 
-            except (AttributeError, RuntimeError, IOError) as worker_error:
-                print(f"TTS error occurred in worker: {worker_error}")
+                        print("[SpeakManager] Speaking started")
+                        self.speaking_event.set()
+
+                        # Set voice parameters once before speaking
+                        self.set_voice_by_mood(mood)
+
+                        chunks = self._chunk_text(text)
+                        for chunk in chunks:
+                            # Check for exit request between chunks
+                            if self.exit_requested:
+                                break
+
+                            self._speak_chunk(chunk, mood)
+                            # Reduced sleep time for macOS to improve responsiveness
+                            time.sleep(0.01 if is_macos else 0.05)
+
+                        self.speech_count += 1
+                        print("[SpeakManager] Speaking ended")
+
+                except (AttributeError, RuntimeError, IOError) as worker_error:
+                    print(f"TTS error occurred in worker: {worker_error}")
+                    traceback.print_exc()
+                finally:
+                    self.speaking_event.clear()
+
+                self.queue.task_done()
+
+            except Exception as e:
+                # Catch any other exceptions to prevent thread crashes
+                print(f"Unexpected error in speech worker thread: {e}")
                 traceback.print_exc()
-            finally:
-                self.speaking_event.clear()
-            self.queue.task_done()
+
+        print("[SpeakManager] Speech worker thread exiting cleanly.")
 
     def speak(self, text, mood_override=None):
         self.queue.put((text, mood_override))
@@ -311,31 +377,59 @@ def recalibrate_microphone():
     Recalibrate the microphone for ambient noise.
 
     This function performs a longer calibration phase to better adjust
-    to the current ambient noise conditions.
+    to the current ambient noise conditions. It uses chunked calibration
+    to ensure the process is interruptible with CTRL+C.
 
     Returns:
         bool: True if recalibration was successful, False otherwise
     """
     try:
         recognizer = sr.Recognizer()
-        mic = sr.Microphone()
+
+        try:
+            mic = sr.Microphone()
+        except (OSError, IOError) as e:
+            print(f"Error initializing microphone: {e}")
+            return False
 
         print("Recalibrating microphone...")
         print("Please remain quiet for a moment...")
 
         with mic as source:
             # Use a longer duration for explicit recalibration
-            duration = max(AMBIENT_NOISE_DURATION * 2, 5.0)
-            recognizer.adjust_for_ambient_noise(source, duration=duration)
+            total_duration = max(AMBIENT_NOISE_DURATION * 2, 5.0)
 
-        print(
-            f"Recalibration complete. Energy threshold: {recognizer.energy_threshold}"
-        )
-        return True
+            # Break into smaller chunks to allow for interruption
+            chunk_size = 0.5  # seconds
+            num_chunks = int(total_duration / chunk_size)
 
+            # Perform calibration in interruptible chunks
+            for i in range(num_chunks):
+                try:
+                    print(f"Calibration progress: {i+1}/{num_chunks}", end="\r")
+                    recognizer.adjust_for_ambient_noise(source, duration=chunk_size)
+                except KeyboardInterrupt:
+                    print("\nCalibration interrupted by user")
+                    raise
+                except Exception as e:
+                    print(f"\nError during calibration chunk {i+1}: {e}")
+                    # Continue with other chunks
+
+            print(
+                "\nCalibration complete. Energy threshold: "
+                f"{recognizer.energy_threshold:.1f}"
+            )
+            return True
+
+    except KeyboardInterrupt:
+        print("\nKeyboard interrupt detected during microphone recalibration")
+        raise
     except (sr.RequestError, sr.WaitTimeoutError, OSError, IOError) as e:
         # Catch specific exceptions instead of broad Exception
         print(f"Error during microphone recalibration: {e}")
+        return False
+    except Exception as e:
+        print(f"Unexpected error during microphone recalibration: {e}")
         return False
 
 
@@ -359,12 +453,23 @@ def listen_to_user(timeout=None, recalibrate=False):
     """
     if timeout is None:
         timeout = SPEECH_RECOGNITION_TIMEOUT
-    recognizer = sr.Recognizer()
-    mic = sr.Microphone()
 
+    # Create a separate recognizer for each session to avoid issues with interrupted instances
+    recognizer = sr.Recognizer()
+
+    # Initialize the microphone in a try block to handle potential errors
+    try:
+        mic = sr.Microphone()
+    except (OSError, IOError) as e:
+        print(f"Error initializing microphone: {e}")
+        return None
+
+    # Make audio capture interruptible with a short timeout
+    # This ensures CTRL+C can interrupt even during long operations
     try:
         with mic as source:
             print("Listening...")
+
             # Use configurable noise sampling duration for better filtering
             calibrate_duration = AMBIENT_NOISE_DURATION
             if recalibrate:
@@ -372,7 +477,22 @@ def listen_to_user(timeout=None, recalibrate=False):
                 calibrate_duration = max(AMBIENT_NOISE_DURATION, 5.0)
                 print(f"Recalibrating microphone for {calibrate_duration} seconds...")
 
-            recognizer.adjust_for_ambient_noise(source, duration=calibrate_duration)
+            # Use shorter durations for ambient noise calibration to ensure interruptibility
+            calibration_chunk_size = 0.5  # seconds
+            chunks_needed = int(calibrate_duration / calibration_chunk_size)
+
+            # Break calibration into smaller chunks that can be interrupted
+            for i in range(chunks_needed):
+                try:
+                    recognizer.adjust_for_ambient_noise(
+                        source, duration=calibration_chunk_size
+                    )
+                except KeyboardInterrupt:
+                    print("\nKeyboard interrupt detected during calibration")
+                    raise
+                except Exception as e:
+                    print(f"Error during calibration chunk {i+1}: {e}")
+                    # Continue with other chunks
 
             # Apply configurable energy threshold settings
             recognizer.dynamic_energy_threshold = USE_DYNAMIC_ENERGY_THRESHOLD
@@ -390,6 +510,9 @@ def listen_to_user(timeout=None, recalibrate=False):
                 # Re-raise for proper exit handling
                 print("\nKeyboard interrupt detected during listening")
                 raise
+            except Exception as e:
+                print(f"Error during listening: {e}")
+                return None
 
         try:
             text = recognizer.recognize_google(audio)
@@ -401,7 +524,13 @@ def listen_to_user(timeout=None, recalibrate=False):
         except sr.RequestError as e:
             print(f"Could not request results; {e}")
             return None
+        except Exception as e:
+            print(f"Unexpected error during recognition: {e}")
+            return None
     except KeyboardInterrupt:
         # Re-raise for proper exit handling
         print("\nKeyboard interrupt detected during speech recognition")
         raise
+    except Exception as e:
+        print(f"Unexpected error in speech recognition: {e}")
+        return None

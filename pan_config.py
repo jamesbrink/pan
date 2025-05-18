@@ -7,6 +7,8 @@ from a .env file if present.
 """
 
 import os
+import platform
+from pathlib import Path
 
 from dotenv import load_dotenv
 
@@ -30,6 +32,11 @@ if not OPENWEATHERMAP_API_KEY:
 if not NEWS_API_KEY:
     print("Warning: News API key is missing. News functionality will be limited.")
 
+# AI model settings
+LLM_MODEL_NAME = os.getenv("LLM_MODEL_NAME", "gpt2")
+CONVERSATION_MODEL_NAME = os.getenv("CONVERSATION_MODEL_NAME", "EleutherAI/gpt-j-6B")
+MAX_MEMORY_LENGTH = int(os.getenv("MAX_MEMORY_LENGTH", "10"))
+
 # Location settings
 DEFAULT_CITY = os.getenv("DEFAULT_CITY", "Kelso")
 DEFAULT_COUNTRY_CODE = os.getenv("DEFAULT_COUNTRY_CODE", "US")
@@ -42,8 +49,7 @@ DEFAULT_VOICE_RATE = int(os.getenv("DEFAULT_VOICE_RATE", "160"))
 DEFAULT_VOICE_VOLUME = float(os.getenv("DEFAULT_VOICE_VOLUME", "0.9"))
 
 # Platform-specific voice settings
-import platform
-if platform.system() == 'Darwin':
+if platform.system() == "Darwin":
     # macOS typically needs a higher rate for NSSpeechSynthesizer
     DEFAULT_VOICE_RATE = int(os.getenv("MACOS_VOICE_RATE", "190"))
 
@@ -61,6 +67,7 @@ ENERGY_THRESHOLD = int(os.getenv("ENERGY_THRESHOLD", "300"))
 SPEECH_RECOGNITION_TIMEOUT = int(os.getenv("SPEECH_RECOGNITION_TIMEOUT", "5"))
 PHRASE_TIME_LIMIT = int(os.getenv("PHRASE_TIME_LIMIT", "10"))
 
+
 def get_config():
     """
     Return all configuration settings as a dictionary.
@@ -73,7 +80,7 @@ def get_config():
             "path": DATABASE_PATH,
         },
         "api_keys": {
-            "weather": WEATHER_API_KEY or "Not Set",
+            "weather": OPENWEATHERMAP_API_KEY or "Not Set",
             "news": NEWS_API_KEY or "Not Set",
         },
         "location": {
@@ -82,6 +89,11 @@ def get_config():
         },
         "assistant": {
             "name": ASSISTANT_NAME,
+        },
+        "ai": {
+            "model_name": LLM_MODEL_NAME,
+            "conversation_model": CONVERSATION_MODEL_NAME,
+            "max_memory_length": MAX_MEMORY_LENGTH,
         },
         "voice": {
             "rate": DEFAULT_VOICE_RATE,
@@ -98,8 +110,9 @@ def get_config():
             "energy_threshold": ENERGY_THRESHOLD,
             "speech_recognition_timeout": SPEECH_RECOGNITION_TIMEOUT,
             "phrase_time_limit": PHRASE_TIME_LIMIT,
-        }
+        },
     }
+
 
 # Display configuration on startup (for debugging)
 if __name__ == "__main__":
