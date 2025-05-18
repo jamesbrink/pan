@@ -38,10 +38,11 @@ jobs:
           echo 'substitute = false' >> ~/.config/nix/nix.conf
           
       - name: Run linting
-        # Handle the stderr redirection to /dev/null to filter out stdenv.tests warnings
+        # Handle the stderr redirection to filter out stdenv.tests warnings
         # while still allowing actual errors to fail the build
         run: |
-          nix --log-format raw develop 2> >(grep -v "stdenv.tests" >&2) -c make lint || exit $?
+          export NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1
+          nix --log-format raw --option warn-dirty false develop --impure 2> >(grep -v "stdenv.tests" >&2) -c make lint || exit $?
         shell: bash
 
   typecheck:
@@ -75,10 +76,11 @@ jobs:
           echo 'substitute = false' >> ~/.config/nix/nix.conf
           
       - name: Run type checking
-        # Handle the stderr redirection to /dev/null to filter out stdenv.tests warnings
+        # Handle the stderr redirection to filter out stdenv.tests warnings
         # while still allowing actual errors to fail the build
         run: |
-          nix --log-format raw develop 2> >(grep -v "stdenv.tests" >&2) -c make type || exit $?
+          export NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1
+          nix --log-format raw --option warn-dirty false develop --impure 2> >(grep -v "stdenv.tests" >&2) -c make type || exit $?
         shell: bash
 
   test:
@@ -112,8 +114,9 @@ jobs:
           echo 'substitute = false' >> ~/.config/nix/nix.conf
           
       - name: Run tests
-        # Handle the stderr redirection to /dev/null to filter out stdenv.tests warnings
+        # Handle the stderr redirection to filter out stdenv.tests warnings
         # while still allowing actual errors to fail the build
         run: |
-          nix --log-format raw develop 2> >(grep -v "stdenv.tests" >&2) -c make test || exit $?
+          export NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1
+          nix --log-format raw --option warn-dirty false develop --impure 2> >(grep -v "stdenv.tests" >&2) -c make test || exit $?
         shell: bash
