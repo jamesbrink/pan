@@ -3,10 +3,15 @@ pyttsx3>=2.90
 SpeechRecognition>=3.8.1
 pyaudio>=0.2.11
 requests>=2.25.1
-transformers>=4.28.0
+transformers==4.51.3
 torch>=2.0.0
 python-dotenv>=1.0.0
-huggingface-hub[hf_xet]>=0.30.0
+huggingface-hub[hf_xet]==0.30.2
+# Note: bitsandbytes is optional and requires CUDA support
+# If you don't have CUDA or encounter installation issues, the system will fall back
+# to non-quantized model loading
+bitsandbytes==0.45.1; platform_system != "Darwin" or platform_machine != "arm64"
+accelerate==1.5.2
 
 # macOS specific dependencies
 pyobjc>=9.0.1; sys_platform == 'darwin'

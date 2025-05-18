@@ -11,7 +11,15 @@
       let
         pkgs = import nixpkgs {
           inherit system;
+          # Allow unfree packages for CUDA dependencies
+          config = {
+            allowUnfree = true;
+          };
         };
+        
+        # Try to get bitsandbytes for quantization - we wrap this in a try-catch block
+        # so that it will still work even if bitsandbytes is not available on this system
+        bitsandbytesAvailable = builtins.tryEval (builtins.deepSeq pkgs.python312.pkgs.bitsandbytes true);
         
         pythonEnv = pkgs.python312.withPackages (ps: with ps; [
           # Development tools
@@ -34,6 +42,9 @@
           python-dotenv
           # Add huggingface_hub for model downloads
           huggingface-hub
+          # Add bitsandbytes for model quantization, if available
+          (if bitsandbytesAvailable.success then bitsandbytes else null)
+          accelerate
           
           # macOS specific dependencies
           pyobjc-core
@@ -70,9 +81,76 @@
             export PYTHONPATH="$PIP_TARGET:$PYTHONPATH"
             export PATH="$PIP_TARGET/bin:$PATH"
             
-            echo "Installing hf_xet for faster model downloads..."
+            echo "Installing additional dependencies for model management..."
+            # Create local pip directory if it doesn't exist
+            mkdir -p .pip
+            
+            # Install just the hf_xet extension which isn't available in nixpkgs
+            echo "Installing hf_xet extension for Hugging Face hub..."
             pip install --target="$PIP_TARGET" --quiet hf_xet
-            echo "hf_xet successfully installed to .pip directory."
+            
+            # Print package versions for key dependencies
+            echo "Python package versions:"
+            # Check for installed packages using separate Python commands
+            echo -n "transformers: "
+            python -c "import transformers; print(transformers.__version__)"
+            
+            echo -n "bitsandbytes: "
+            python -c "
+import sys
+try:
+    import bitsandbytes
+    print(bitsandbytes.__version__)
+except (ImportError, AttributeError):
+    print('not installed (quantization will be disabled)')
+"
+            
+            echo -n "accelerate: "
+            python -c "
+import sys
+try:
+    import accelerate
+    print(accelerate.__version__)
+except (ImportError, AttributeError):
+    print('not installed')
+"
+            
+            echo -n "huggingface_hub: "
+            python -c "
+import sys
+try:
+    import huggingface_hub
+    print(huggingface_hub.__version__)
+except (ImportError, AttributeError):
+    print('not installed')
+"
+            
+            # Check if we need to create a local .env file with default settings
+            if [ ! -f .env ]; then
+              echo "No .env file found, creating from .env.example..."
+              cp .env.example .env
+              
+              # Check if bitsandbytes is available and update the .env file accordingly
+              # Simply create a temp script to check for bitsandbytes
+              echo '
+import sys
+try:
+    import bitsandbytes
+    exit(0)
+except ImportError:
+    exit(1)
+' > /tmp/check_bnb.py
+              
+              if ! python /tmp/check_bnb.py || [ "$(uname -sm)" = "Darwin arm64" ]; then
+                echo "bitsandbytes not available or running on Apple Silicon, setting MODEL_QUANTIZATION_LEVEL=none in .env"
+                # Use simple approach that works everywhere
+                cp .env .env.tmp
+                grep -v "MODEL_QUANTIZATION_LEVEL=" .env.tmp > .env
+                echo "MODEL_QUANTIZATION_LEVEL=none" >> .env
+                rm .env.tmp
+              fi
+            fi
+            echo "Additional model dependencies successfully installed to .pip directory."
             echo ""
             echo "Development Commands:"
             echo "  make format    - Format code with black and isort"

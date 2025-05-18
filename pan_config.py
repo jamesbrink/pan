@@ -12,6 +12,9 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+# Set TOKENIZERS_PARALLELISM environment variable to suppress warnings
+os.environ["TOKENIZERS_PARALLELISM"] = os.getenv("TOKENIZERS_PARALLELISM", "false")
+
 # Load environment variables from .env file if it exists
 env_path = Path(__file__).parent / ".env"
 if env_path.exists():
@@ -36,6 +39,8 @@ if not NEWS_API_KEY:
 LLM_MODEL_NAME = os.getenv("LLM_MODEL_NAME", "gpt2")
 CONVERSATION_MODEL_NAME = os.getenv("CONVERSATION_MODEL_NAME", "EleutherAI/gpt-j-6B")
 MAX_MEMORY_LENGTH = int(os.getenv("MAX_MEMORY_LENGTH", "10"))
+MODEL_CONTEXT_LENGTH = int(os.getenv("MODEL_CONTEXT_LENGTH", "2048"))
+MODEL_QUANTIZATION_LEVEL = os.getenv("MODEL_QUANTIZATION_LEVEL", "4bit")
 
 # Location settings
 DEFAULT_CITY = os.getenv("DEFAULT_CITY", "Kelso")
@@ -99,6 +104,8 @@ def get_config():
             "model_name": LLM_MODEL_NAME,
             "conversation_model": CONVERSATION_MODEL_NAME,
             "max_memory_length": MAX_MEMORY_LENGTH,
+            "context_length": MODEL_CONTEXT_LENGTH,
+            "quantization_level": MODEL_QUANTIZATION_LEVEL,
         },
         "voice": {
             "rate": DEFAULT_VOICE_RATE,
