@@ -2,11 +2,9 @@
 Speech Interface Module for PAN (Cross-Platform)
 
 This module provides text-to-speech and speech recognition capabilities for PAN.
-It supports both Windows (SAPI) and Linux (espeak) for TTS, and provides robust 
-speech recognition with Google Speech API.
+On Windows, it uses SAPI5 directly for maximum stability. On Linux, it uses espeak.
 """
 
-import pyttsx3
 import speech_recognition as sr
 import threading
 import queue
@@ -15,6 +13,7 @@ import traceback
 import platform
 from pan_emotions import pan_emotions
 from pan_config import DEFAULT_VOICE_RATE, DEFAULT_VOICE_VOLUME
+import win32com.client  # For SAPI5 on Windows
 
 # Detect OS
 is_windows = platform.system().lower() == "windows"
@@ -34,92 +33,79 @@ emotion_voices = {
 
 class SpeakManager:
     def __init__(self):
-        self._init_engine()
         self.queue = queue.Queue()
         self.lock = threading.Lock()
         self.speaking_event = threading.Event()
         self.thread = threading.Thread(target=self._worker, daemon=True)
         self.thread.start()
+        self._init_engine()
 
     def _init_engine(self):
-        print("[SpeakManager] Initializing pyttsx3 engine")
+        """Initialize the TTS engine."""
+        print("[SpeakManager] Initializing TTS engine...")
         try:
             if is_windows:
-                self.engine = pyttsx3.init(driverName='sapi5')
+                self.engine = win32com.client.Dispatch("SAPI.SpVoice")
+                print("[SpeakManager] Using SAPI5 (Windows)")
             elif is_linux:
+                import pyttsx3
                 self.engine = pyttsx3.init(driverName='espeak')
+                print("[SpeakManager] Using espeak (Linux)")
             else:
-                self.engine = pyttsx3.init()  # Default cross-platform
+                print("[TTS ERROR] Unsupported platform.")
+                self.engine = None
         except Exception as e:
-            print(f"Failed to init TTS engine: {e}")
-            self._create_dummy_engine()
-
-    def _create_dummy_engine(self):
-        class DummyEngine:
-            def say(self, text): print(f"[TTS FALLBACK] Speaking: {text}")
-            def runAndWait(self): pass
-            def stop(self): pass
-            def setProperty(self, prop, value): pass
-
-        self.engine = DummyEngine()
-        print("[SpeakManager] Using fallback dummy TTS engine")
+            print(f"[TTS ERROR] Failed to initialize TTS engine: {e}")
+            self.engine = None
 
     def set_voice_by_mood(self, mood=None):
+        """Adjust TTS voice settings based on mood."""
         if not mood:
             mood = pan_emotions.get_mood()
         settings = emotion_voices.get(mood, emotion_voices['neutral'])
-        self.engine.setProperty('rate', settings['rate'])
-        self.engine.setProperty('volume', settings['volume'])
+        
+        if is_windows:
+            self.engine.Rate = settings['rate'] - 10  # SAPI uses different rate scale
+            self.engine.Volume = int(settings['volume'] * 100)
+        elif is_linux:
+            self.engine.setProperty('rate', settings['rate'])
+            self.engine.setProperty('volume', settings['volume'])
 
     def speak(self, text, mood_override=None):
+        """Queue text for speaking."""
         self.queue.put((text, mood_override or pan_emotions.get_mood()))
 
     def _worker(self):
+        """TTS worker thread - always running."""
         while True:
             text, mood = self.queue.get()
             try:
                 self._speak_with_recovery(text, mood)
-            except Exception:
-                print("[TTS ERROR] Fatal Error in TTS Worker.")
+            except Exception as e:
+                print(f"[TTS ERROR] Fatal Error in TTS Worker: {e}")
                 traceback.print_exc()
                 self._init_engine()  # Re-initialize on failure
             finally:
                 self.queue.task_done()
 
     def _speak_with_recovery(self, text, mood):
+        """Speak with automatic recovery."""
         with self.lock:
-            self.engine.stop()
-            self._init_engine()
-            self.engine.setProperty('rate', emotion_voices.get(mood, emotion_voices['neutral'])['rate'])
-            self.engine.setProperty('volume', emotion_voices.get(mood, emotion_voices['neutral'])['volume'])
-
-            print("[SpeakManager] Speaking started")
-            chunks = self._chunk_text(text)
-            for chunk in chunks:
-                self.engine.say(chunk)
+            self.set_voice_by_mood(mood)
+            print(f"[SpeakManager] Speaking with mood: {mood}")
+            if is_windows:
+                self.engine.Speak(text)
+            elif is_linux:
+                self.engine.say(text)
                 self.engine.runAndWait()
-
-            print("[SpeakManager] Speaking ended")
-
-    def _chunk_text(self, text):
-        import re
-        sentences = re.split(r'(?<=[.!?]) +', text)
-        chunks = []
-        current = ""
-        for sentence in sentences:
-            if len(current) + len(sentence) <= 150:  # MAX_CHUNK_LENGTH
-                current += (sentence + " ")
             else:
-                chunks.append(current.strip())
-                current = sentence + " "
-        if current:
-            chunks.append(current.strip())
-        return chunks
+                print(f"[TTS ERROR] Unsupported platform.")
 
 # Global instance of SpeakManager to be used throughout the application
 speak_manager = SpeakManager()
 
 def speak(text, mood_override=None):
+    """Public function to speak text."""
     try:
         speak_manager.speak(text, mood_override)
     except Exception as e:
