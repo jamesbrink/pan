@@ -7,19 +7,23 @@ repos:
     -   id: check-yaml
     -   id: check-added-large-files
 
--   repo: https://github.com/pycqa/isort
-    rev: 5.13.2
+-   repo: local
     hooks:
     -   id: isort
+        name: isort
+        entry: nix develop --command isort
+        language: system
+        types: [python]
 
--   repo: https://github.com/psf/black
-    rev: 24.2.0
-    hooks:
     -   id: black
+        name: black
+        entry: nix develop --command black
+        language: system
+        types: [python]
 
--   repo: https://github.com/pycqa/pylint
-    rev: v3.1.0
-    hooks:
     -   id: pylint
-        args: [--rcfile=.pylintrc]
+        name: pylint
+        entry: nix develop --command pylint --rcfile=.pylintrc
+        language: system
+        types: [python]
         exclude: ^(docs/|tests/)
