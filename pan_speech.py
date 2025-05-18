@@ -6,6 +6,10 @@ It supports both Windows (SAPI) and Linux (espeak) for TTS, and provides robust
 speech recognition with Google Speech API.
 """
 
+# pylint: disable=broad-exception-caught,too-many-lines
+# This module deals with many hardware and OS-specific interactions that can fail in various ways,
+# making it necessary to catch general exceptions in many places.
+
 import os
 import platform
 import queue
@@ -22,21 +26,19 @@ with warnings.catch_warnings():
     warnings.filterwarnings("ignore", category=DeprecationWarning)
     import speech_recognition as sr
 
-from pan_config import (
+# pylint: disable=unused-import
+from pan_config import (  # Used when this module is imported by main.py; The following imports are used in functions that are called from main.py; but pylint doesn't detect this usage; pylint: disable=unused-import
     AMBIENT_NOISE_DURATION,
     ASSISTANT_NAME,
+    CONTINUOUS_LISTENING,
     DEFAULT_VOICE_RATE,
     DEFAULT_VOICE_VOLUME,
     ENERGY_THRESHOLD,
+    KEYWORD_ACTIVATION_THRESHOLD,
     PHRASE_TIME_LIMIT,
     SPEECH_RECOGNITION_TIMEOUT,
     USE_DYNAMIC_ENERGY_THRESHOLD,
-    # The following imports are used in functions that are called from main.py
-    # but pylint doesn't detect this usage
-    # pylint: disable=unused-import
-    CONTINUOUS_LISTENING,  # Used in listen_for_keyword when called from main.py
-    KEYWORD_ACTIVATION_THRESHOLD,  # Used in listen_for_keyword when called from main.py
-    USE_KEYWORD_ACTIVATION,  # Used in listen_for_keyword when called from main.py
+    USE_KEYWORD_ACTIVATION,
 )
 from pan_emotions import pan_emotions
 
@@ -119,7 +121,8 @@ class SpeakManager:
             try:
                 if hasattr(self.engine, "stop"):
                     self.engine.stop()
-            except Exception as e:
+            except (AttributeError, RuntimeError, IOError) as e:
+                # These are the specific exceptions that might occur when stopping the engine
                 print(f"Error stopping speech engine: {e}")
 
         # Clear speaking flag
@@ -191,32 +194,41 @@ class SpeakManager:
         if len(text) <= chunk_size:
             return [text]
 
+        # Helper function to handle very long sentences
+        # This reduces nesting depth by moving logic to a separate function
+        def split_long_sentence(sentence, size):
+            result = []
+            # Split on commas and other natural pauses for very long sentences
+            subparts = re.split(r"(?<=,|;|:) +", sentence)
+            subcurrent = ""
+            for part in subparts:
+                if len(subcurrent) + len(part) <= size:
+                    subcurrent += part + " "
+                else:
+                    if subcurrent:
+                        result.append(subcurrent.strip())
+                    subcurrent = part + " "
+            if subcurrent:
+                result.append(subcurrent.strip())
+            return result
+
         chunks = []
         current = ""
         for sentence in sentences:
             if len(current) + len(sentence) <= chunk_size:
                 current += sentence + " "
-            else:
-                # If we have content to add, add it
-                if current:
-                    chunks.append(current.strip())
+                continue
 
-                # If the sentence itself is too long, we need to split it further
-                if len(sentence) > chunk_size:
-                    # Split on commas and other natural pauses for very long sentences
-                    subparts = re.split(r"(?<=,|;|:) +", sentence)
-                    subcurrent = ""
-                    for part in subparts:
-                        if len(subcurrent) + len(part) <= chunk_size:
-                            subcurrent += part + " "
-                        else:
-                            if subcurrent:
-                                chunks.append(subcurrent.strip())
-                            subcurrent = part + " "
-                    if subcurrent:
-                        chunks.append(subcurrent.strip())
-                else:
-                    current = sentence + " "
+            # If we have content to add, add it
+            if current:
+                chunks.append(current.strip())
+
+            # If the sentence itself is too long, we need to split it further
+            if len(sentence) > chunk_size:
+                chunks.extend(split_long_sentence(sentence, chunk_size))
+            else:
+                current = sentence + " "
+
         if current:
             chunks.append(current.strip())
 
@@ -256,13 +268,13 @@ class SpeakManager:
 
                 subprocess.run(["say", text], check=True)
                 return True
-            elif is_linux:
+            if is_linux:
                 # Try espeak on Linux
                 import subprocess
 
                 subprocess.run(["espeak", text], check=True)
                 return True
-            elif is_windows and self.sapi_engine:
+            if is_windows and self.sapi_engine:
                 # Already handled in _speak_chunk
                 return False
             return False
@@ -300,10 +312,9 @@ class SpeakManager:
             if self._try_system_command_tts(chunk):
                 self.tts_attempt_count = 0
                 return
-            else:
-                print(f"[SpeakManager] TTS Fallback (text only): {chunk}")
-                self.tts_attempt_count = 0
-                return
+            print(f"[SpeakManager] TTS Fallback (text only): {chunk}")
+            self.tts_attempt_count = 0
+            return
 
         # Use Windows SAPI if available
         if is_windows and self.sapi_engine:
@@ -549,6 +560,7 @@ def recalibrate_microphone():
 
 
 def listen_for_keyword(timeout=3):
+    # pylint: disable=too-many-return-statements
     """
     Listen for the wake keyword (assistant name) in ambient audio.
 
@@ -686,6 +698,7 @@ def listen_for_keyword(timeout=3):
 
 
 def listen_to_user(timeout=None, recalibrate=False, quiet_mode=False):
+    # pylint: disable=too-many-return-statements
     """
     Listen for user speech input and convert it to text.
 

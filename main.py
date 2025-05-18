@@ -33,9 +33,12 @@ MIN_SPEECH_INTERVAL_SECONDS = 15
 USE_KEYWORD_ACTIVATION = True
 CONTINUOUS_LISTENING = True
 
+
 # Load Configuration Settings
 def load_config():
+    """Load configuration settings from pan_config."""
     config = pan_config.get_config()
+    # pylint: disable=global-statement
     global MAX_SHORT_TERM_MEMORY, IDLE_THRESHOLD_SECONDS, MIN_SPEECH_INTERVAL_SECONDS
     global USE_KEYWORD_ACTIVATION, CONTINUOUS_LISTENING
 
@@ -52,17 +55,21 @@ load_config()
 
 
 def get_time_based_greeting():
-    hour = datetime.now().hour
-    if 5 <= hour < 12:
+    """Get a time-appropriate greeting based on the current hour."""
+    # pylint: disable=redefined-outer-name
+    current_hour = datetime.now().hour
+    if 5 <= current_hour < 12:
         return "Good morning!"
-    if 12 <= hour < 17:
+    if 12 <= current_hour < 17:
         return "Good afternoon!"
-    if 17 <= hour < 22:
+    if 17 <= current_hour < 22:
         return "Good evening!"
     return "Hello!"
 
 
 def curiosity_loop():
+    """Thread function that periodically generates content based on curiosity."""
+    # pylint: disable=global-statement
     global last_interaction_time, last_speech_time
 
     while curiosity_active:
@@ -71,17 +78,18 @@ def curiosity_loop():
 
         if idle_time >= IDLE_THRESHOLD_SECONDS:
             topic = random.choice(["space", "history", "technology", "science"])
-            assistant_name = pan_config.ASSISTANT_NAME
-            print(f"{assistant_name} is curious about {topic}...")
+            # pylint: disable=redefined-outer-name
+            ai_name = pan_config.ASSISTANT_NAME
+            print(f"{ai_name} is curious about {topic}...")
             pan_speech.speak(
                 f"I'm curious about {topic}. Let me see what I can find.",
                 mood_override="curious",
             )
 
-            response = pan_research.live_search(topic)
-            print(f"{assistant_name}'s curiosity: {response}")
+            search_response = pan_research.live_search(topic)
+            print(f"{ai_name}'s curiosity: {search_response}")
             pan_speech.speak(
-                f"I just learned something amazing about {topic}! {response}"
+                f"I just learned something amazing about {topic}! {search_response}"
             )
 
             last_speech_time = time.time()
@@ -106,7 +114,9 @@ def listen_with_retries(max_attempts=3, timeout=None):
     Raises:
         KeyboardInterrupt: Re-raises keyboard interrupt to allow clean exit
     """
+    # pylint: disable=global-variable-not-assigned,too-many-return-statements
     global exit_requested
+    result = None
 
     # Wait for any TTS to finish before listening
     wait_start = time.time()
@@ -178,7 +188,7 @@ def listen_with_retries(max_attempts=3, timeout=None):
     # If we get here, we've reached max attempts without success
     # Don't print verbose "Max listen attempts" message - just return None
     # This allows the main loop to handle it more gracefully
-    return None
+    return result
 
 
 # Global flag to track application state
@@ -187,6 +197,7 @@ exit_requested = False
 
 def cleanup_and_exit():
     """Perform clean shutdown operations and exit."""
+    # pylint: disable=global-statement
     global curiosity_active, exit_requested
 
     print("\nShutting down cleanly...")
@@ -204,7 +215,7 @@ def cleanup_and_exit():
 
         # Small delay to allow thread cleanup
         time.sleep(0.2)
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-exception-caught
         print(f"Error during speech engine cleanup: {e}")
 
     print("Goodbye!")
@@ -252,7 +263,7 @@ def check_macos_microphone_permissions():
             )
             print("until you grant microphone permissions!")
             print("=" * 60 + "\n")
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-exception-caught
         print(f"Error checking microphone permissions: {e}")
 
 
@@ -275,36 +286,34 @@ if __name__ == "__main__":
     # Check for microphone permissions on macOS
     check_macos_microphone_permissions()
 
-    assistant_name = pan_config.ASSISTANT_NAME
-    print(f"{assistant_name} is starting...")
+    ai_name = pan_config.ASSISTANT_NAME
+    print(f"{ai_name} is starting...")
     pan_core.initialize_pan()
 
     # Streamlined greeting with time-based introduction
-    hour = datetime.now().hour
+    current_hour = datetime.now().hour
     time_greeting = (
         "Good morning"
-        if 5 <= hour < 12
+        if 5 <= current_hour < 12
         else (
             "Good afternoon"
-            if 12 <= hour < 17
-            else "Good evening" if 17 <= hour < 22 else "Hello"
+            if 12 <= current_hour < 17
+            else "Good evening" if 17 <= current_hour < 22 else "Hello"
         )
     )
 
     # Full name explanation based on assistant name
-    name_explanation = (
-        "your Personal Assistant with Nuance" if assistant_name == "Pan" else ""
-    )
+    name_explanation = "your Personal Assistant with Nuance" if ai_name == "Pan" else ""
     name_connector = ", " if name_explanation else ""
 
     # Add continuous listening mode information if enabled
     wake_word_info = ""
     if USE_KEYWORD_ACTIVATION and CONTINUOUS_LISTENING:
-        wake_word_info = f" I'm in continuous listening mode, so you can activate me anytime by saying '{assistant_name}'."
+        wake_word_info = f" I'm in continuous listening mode, so you can activate me anytime by saying '{ai_name}'."
 
     try:
         pan_speech.speak(
-            f"{time_greeting}! I'm {assistant_name}{name_connector}{name_explanation}.{wake_word_info} I can help you search for information, check the weather, get news updates, or just chat. What can I do for you today?"
+            f"{time_greeting}! I'm {ai_name}{name_connector}{name_explanation}.{wake_word_info} I can help you search for information, check the weather, get news updates, or just chat. What can I do for you today?"
         )
 
         curiosity_thread = threading.Thread(target=curiosity_loop, daemon=True)
@@ -323,9 +332,9 @@ if __name__ == "__main__":
                             keyword_detected = pan_speech.listen_for_keyword()
                             if keyword_detected:
                                 # Wake word detected, break out of the loop
-                                assistant_name = pan_config.ASSISTANT_NAME
+                                ai_name = pan_config.ASSISTANT_NAME
                                 print(
-                                    f"Wake word '{assistant_name}' detected! Listening for command..."
+                                    f"Wake word '{ai_name}' detected! Listening for command..."
                                 )
                                 # Give a brief acknowledgment to let the user know it's listening
                                 # Wait a moment to make sure any previous TTS operations are completed
@@ -334,6 +343,7 @@ if __name__ == "__main__":
                                     pan_speech.speak("Yes?", mood_override="curious")
                                     # Give time for the speech to start before continuing
                                     time.sleep(0.5)
+                                # pylint: disable=broad-exception-caught
                                 except Exception as e:
                                     print(f"Error acknowledging wake word: {e}")
                                 break
@@ -341,13 +351,15 @@ if __name__ == "__main__":
                             # Counter to detect if we're having wake word detection issues
                             # This will let us show a helpful message after several attempts
                             # Store attempt counter as an attribute of the function
-                            if not hasattr(pan_speech.listen_for_keyword, "attempt_counter"):
-                                pan_speech.listen_for_keyword.attempt_counter = 0
+                            if not hasattr(
+                                pan_speech.listen_for_keyword, "attempt_counter"
+                            ):
+                                pan_speech.listen_for_keyword.attempt_counter = 0  # type: ignore
 
-                            pan_speech.listen_for_keyword.attempt_counter += 1
+                            pan_speech.listen_for_keyword.attempt_counter += 1  # type: ignore
 
                             # After several attempts, show a message about potential mic issues
-                            if pan_speech.listen_for_keyword.attempt_counter % 20 == 0:
+                            if pan_speech.listen_for_keyword.attempt_counter % 20 == 0:  # type: ignore
                                 platform_name = platform.system()
                                 if platform_name == "Darwin":  # macOS
                                     print(
@@ -385,10 +397,10 @@ if __name__ == "__main__":
                         break
 
                     # Process non-exit commands
-                    response = pan_conversation.respond(user_input, user_id)
-                    assistant_name = pan_config.ASSISTANT_NAME
-                    print(f"{assistant_name}: {response}")
-                    pan_speech.speak(response)
+                    ai_response = pan_conversation.respond(user_input, user_id)
+                    ai_name = pan_config.ASSISTANT_NAME
+                    print(f"{ai_name}: {ai_response}")
+                    pan_speech.speak(ai_response)
 
                     # Reset the last interaction time
                     last_interaction_time = time.time()
@@ -403,7 +415,7 @@ if __name__ == "__main__":
                 # This should be caught by the signal handler, but just in case
                 cleanup_and_exit()
                 break
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-exception-caught
         print(f"Unexpected error: {e}")
         cleanup_and_exit()
     except KeyboardInterrupt:

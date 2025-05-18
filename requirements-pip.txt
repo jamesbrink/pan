@@ -1,0 +1,4 @@
+hf_xet
+# Try to get a compatible bitsandbytes version, but don't fail if unavailable
+accelerate>=0.20.0
+transformers>=4.36.0

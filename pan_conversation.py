@@ -9,11 +9,12 @@ weather information, and advanced conversational capabilities using configurable
 import random
 
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 import pan_config
 import pan_research
 import pan_settings
+import pan_utils
 
 # Initialize Conversation Model from settings
 print(f"Loading conversation model: {pan_config.CONVERSATION_MODEL_NAME}...")
@@ -31,39 +32,8 @@ tokenizer = AutoTokenizer.from_pretrained(
     pan_config.CONVERSATION_MODEL_NAME, model_max_length=context_length
 )
 
-# Set up quantization configuration
-quantization_config = None
-try:
-    if quantization_level.lower() in ("4bit", "8bit"):
-        bits = 4 if quantization_level.lower() == "4bit" else 8
-        # Check if bitsandbytes is available with required features
-        try:
-            import bitsandbytes
-
-            bnb_version = getattr(bitsandbytes, "__version__", "0.0.0")
-            if bits == 4 and tuple(map(int, bnb_version.split("."))) < (0, 41, 0):
-                print(
-                    f"Warning: bitsandbytes version {bnb_version} may not support 4-bit quantization. Using 8-bit instead."
-                )
-                bits = 8
-
-            quantization_config = BitsAndBytesConfig(
-                load_in_4bit=bits == 4,
-                load_in_8bit=bits == 8,
-                bnb_4bit_compute_dtype=torch.float16,
-                bnb_4bit_use_double_quant=True,
-                bnb_4bit_quant_type="nf4",
-            )
-            print(f"Using {bits}-bit quantization for model loading")
-        except (ImportError, AttributeError):
-            print(
-                "Warning: bitsandbytes not available or not supported, falling back to standard loading"
-            )
-            quantization_level = "none"
-except Exception as e:
-    print(
-        f"Warning: Error setting up quantization, falling back to standard loading: {e}"
-    )
+# Set up quantization configuration using the utility function
+quantization_config, bits = pan_utils.create_quantization_config(quantization_level)
 
 # Load the model with appropriate config
 model_kwargs = {}
@@ -118,6 +88,7 @@ print(f"System prompt initialized for {pan_config.ASSISTANT_NAME}")
 
 # Respond to user input
 def respond(user_input, _user_id):  # Prefix unused parameter with underscore
+    # pylint: disable=too-many-return-statements
     if not user_input or user_input.strip() == "":
         return "Sorry, I didn't catch that."
 
@@ -178,6 +149,7 @@ def respond(user_input, _user_id):  # Prefix unused parameter with underscore
 # Local LLM Conversation Function
 def local_llm_conversation(prompt):
     # Explicitly mark that we are modifying the global variable
+    # pylint: disable=global-variable-not-assigned
     global conversation_history
 
     # System prompt is now initialized at startup, so we don't need to check here
@@ -241,6 +213,7 @@ def local_llm_conversation(prompt):
 
             # Move inputs to the right device based on quantization settings
             if pan_config.MODEL_QUANTIZATION_LEVEL.lower() == "none":
+                # pylint: disable=redefined-outer-name
                 device = next(model.parameters()).device
                 inputs = {k: v.to(device) for k, v in inputs.items()}
 
@@ -331,7 +304,7 @@ def local_llm_conversation(prompt):
                 f"Generated response: {response[:50]}{'...' if len(response) > 50 else ''}"
             )
 
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-exception-caught
         response = f"Error with language model: {str(e)}"
 
     # Store response in memory with proper formatting
@@ -351,6 +324,7 @@ def local_llm_conversation(prompt):
 
 # Auto-Summarize Memory
 def summarize_memory():
+    # pylint: disable=global-statement
     global conversation_history
     print("DEBUG: Summarizing conversation history...")
 
@@ -391,6 +365,7 @@ def summarize_memory():
 
             # Move inputs to the right device based on quantization settings
             if pan_config.MODEL_QUANTIZATION_LEVEL.lower() == "none":
+                # pylint: disable=redefined-outer-name
                 device = next(model.parameters()).device
                 inputs = {k: v.to(device) for k, v in inputs.items()}
 
@@ -432,13 +407,14 @@ def summarize_memory():
                 conversation_history = [f"CONVERSATION SUMMARY: {summary.strip()}"]
 
             print(f"DEBUG: Memory summarized: {summary.strip()}")
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-exception-caught
         print(f"Error summarizing memory: {str(e)}")
 
 
 # Clear Memory
 def clear_memory():
     # Explicitly mark that we are modifying the global variable
+    # pylint: disable=global-variable-not-assigned
     global conversation_history
     # Clear the conversation history, but keep the system prompt
     system_prompt = create_system_prompt()
