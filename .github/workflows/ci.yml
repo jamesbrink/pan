@@ -8,15 +8,11 @@ on:
   workflow_dispatch:
 
 jobs:
-  nix-build:
-    name: Build and Test (Unix)
-    runs-on: ${{ matrix.os }}
+  ubuntu-build:
+    name: Build and Test (Ubuntu)
+    runs-on: ubuntu-latest
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest]
 
     steps:
       - name: Checkout repository
@@ -55,14 +51,67 @@ jobs:
         env:
           NIX_CONNECT_TIMEOUT: 60
 
-      # Optional: Run coverage and upload
       - name: Run coverage
         run: |
           nix develop -c make coverage
         env:
           NIX_CONNECT_TIMEOUT: 60
 
-      # Optional: Add a step to build and cache any dependencies
+      - name: Build development environment
+        run: |
+          nix develop --command echo "Development environment successfully built"
+        env:
+          NIX_CONNECT_TIMEOUT: 60
+
+  macos-build:
+    name: Build and Test (macOS)
+    runs-on: macos-latest
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v9
+        with:
+          logger: pretty
+
+      - name: Enable Nix flakes
+        uses: DeterminateSystems/magic-nix-cache-action@v2
+
+      - name: Configure Nix
+        run: |
+          mkdir -p ~/.config/nix
+          echo 'max-jobs = 2' >> ~/.config/nix/nix.conf
+          echo 'connect-timeout = 30' >> ~/.config/nix/nix.conf
+          echo 'stalled-download-timeout = 60' >> ~/.config/nix/nix.conf
+
+      - name: Lint
+        run: |
+          nix develop -c make lint
+        env:
+          NIX_CONNECT_TIMEOUT: 60
+
+      - name: Type check
+        run: |
+          nix develop -c make type
+        env:
+          NIX_CONNECT_TIMEOUT: 60
+
+      - name: Run tests
+        run: |
+          nix develop -c make test
+        env:
+          NIX_CONNECT_TIMEOUT: 60
+
+      - name: Run coverage
+        run: |
+          nix develop -c make coverage
+        env:
+          NIX_CONNECT_TIMEOUT: 60
+
       - name: Build development environment
         run: |
           nix develop --command echo "Development environment successfully built"
