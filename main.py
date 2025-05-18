@@ -5,6 +5,7 @@ Main entry point for the PAN digital assistant. Handles initialization,
 user interaction, command processing, and manages the autonomous curiosity system.
 """
 
+import argparse
 import random
 import signal
 import sys
@@ -17,6 +18,7 @@ import pan_conversation
 import pan_core
 import pan_research
 import pan_speech
+import platform
 
 # Global variables for tracking state
 curiosity_active = True
@@ -196,9 +198,53 @@ def signal_handler(_sig, _frame):
     cleanup_and_exit()
 
 
+def check_macos_microphone_permissions():
+    """
+    On macOS, check if microphone permissions might be an issue and provide guidance.
+    """
+    if platform.system() != "Darwin":
+        return
+        
+    try:
+        # Try to just list microphones as a simple permissions check
+        import speech_recognition as sr
+        mic_list = sr.Microphone.list_microphone_names()
+        
+        if not mic_list:
+            print("\n" + "="*60)
+            print(" "*10 + "*** MACOS MICROPHONE PERMISSION ALERT ***")
+            print("="*60)
+            print("No microphones were detected on your macOS system!")
+            print("This usually means Terminal or your IDE needs microphone permission.")
+            print("\nTo fix this:")
+            print("1. Open System Preferences > Security & Privacy > Privacy > Microphone")
+            print("2. Make sure Terminal or your IDE has permission to access the microphone")
+            print("3. You might need to quit Terminal/IDE completely and restart it")
+            print("4. Try launching from a different Terminal window if using Nix")
+            print("\nThe application will continue, but speech recognition will not work")
+            print("until you grant microphone permissions!")
+            print("="*60 + "\n")
+    except Exception as e:
+        print(f"Error checking microphone permissions: {e}")
+
+
 if __name__ == "__main__":
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='PAN - Personal Assistant with Nuance')
+    parser.add_argument('--test-mic', action='store_true',
+                        help='Run microphone test and exit')
+    args = parser.parse_args()
+    
+    # Special case: if running microphone test, just do that and exit
+    if args.test_mic:
+        pan_speech.test_microphone()
+        sys.exit(0)
+    
     # Register the signal handler for CTRL+C
     signal.signal(signal.SIGINT, signal_handler)
+
+    # Check for microphone permissions on macOS
+    check_macos_microphone_permissions()
 
     assistant_name = pan_config.ASSISTANT_NAME
     print(f"{assistant_name} is starting...")
@@ -260,6 +306,23 @@ if __name__ == "__main__":
                                 except Exception as e:
                                     print(f"Error acknowledging wake word: {e}")
                                 break
+                            
+                            # Counter to detect if we're having wake word detection issues
+                            # This will let us show a helpful message after several attempts
+                            if not hasattr(listen_for_keyword, 'attempt_counter'):
+                                listen_for_keyword.attempt_counter = 0
+                            
+                            listen_for_keyword.attempt_counter += 1
+                            
+                            # After several attempts, show a message about potential mic issues
+                            if listen_for_keyword.attempt_counter % 20 == 0:
+                                platform_name = platform.system()
+                                if platform_name == "Darwin":  # macOS
+                                    print("\nTip: Not detecting wake word? You may have microphone permission issues.")
+                                    print("Run with '--test-mic' to diagnose, or check System Preferences > Privacy > Microphone\n")
+                                else:
+                                    print("\nTip: Not detecting wake word? Try running with '--test-mic' to diagnose microphone issues\n")
+                                
                             # Brief pause to prevent CPU overuse
                             time.sleep(0.1)
                         except KeyboardInterrupt:

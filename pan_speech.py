@@ -6,7 +6,9 @@ It supports both Windows (SAPI) and Linux (espeak) for TTS, and provides robust
 speech recognition with Google Speech API.
 """
 
+import os
 import queue
+import sys
 import threading
 import time
 import traceback
@@ -560,11 +562,39 @@ def listen_for_keyword(timeout=3):
     # Create a recognizer specifically for keyword detection
     recognizer = sr.Recognizer()
     
-    # Initialize the microphone
+    # Initialize the microphone with better error handling
     try:
+        # On macOS, check if we've already listed microphones during startup
+        # If not, provide diagnostics here as well
+        if is_macos and not hasattr(sr.Microphone, '_checked_macos_permissions'):
+            print("Checking available microphones for keyword detection:")
+            mic_list = sr.Microphone.list_microphone_names()
+            
+            # Store a flag to avoid repeating this check
+            sr.Microphone._checked_macos_permissions = True
+            
+            if not mic_list:
+                print("No microphones detected! Check system permissions.")
+                print("\n*** MACOS PERMISSION ERROR ***")
+                print("You need to grant microphone permissions for wake word detection.")
+                print("1. Open System Preferences > Security & Privacy > Privacy > Microphone")
+                print("2. Make sure Terminal or your IDE has permission to access the microphone")
+                print("3. Restart the application after granting permissions")
+                print("*****************************\n")
+                return False
+        
+        # Attempt to initialize the microphone
         mic = sr.Microphone()
     except (OSError, IOError) as e:
         print(f"Error initializing microphone for keyword detection: {e}")
+        
+        if is_macos:
+            print("\n*** MACOS PERMISSION ERROR ***")
+            print("This error often occurs when macOS has denied microphone access.")
+            print("1. Open System Preferences > Security & Privacy > Privacy > Microphone")
+            print("2. Make sure Terminal or your IDE has permission to access the microphone")
+            print("3. Restart the application after granting permissions")
+            print("*****************************\n")
         return False
     
     try:
@@ -660,9 +690,36 @@ def listen_to_user(timeout=None, recalibrate=False):
 
     # Initialize the microphone in a try block to handle potential errors
     try:
+        # List available microphones to help with diagnostics
+        if is_macos:
+            print("Checking available microphones:")
+            mic_list = sr.Microphone.list_microphone_names()
+            if mic_list:
+                for i, mic_name in enumerate(mic_list):
+                    print(f"  {i}: {mic_name}")
+                print(f"Using default microphone: {mic_list[0]}")
+            else:
+                print("No microphones detected! Check system permissions.")
+                print("\n*** MACOS PERMISSION ERROR ***")
+                print("If you're on macOS, you may need to grant microphone permissions.")
+                print("1. Open System Preferences > Security & Privacy > Privacy > Microphone")
+                print("2. Make sure Terminal or your IDE has permission to access the microphone")
+                print("3. Restart the application after granting permissions")
+                print("*****************************\n")
+                return None
+        
+        # Attempt to initialize the microphone
         mic = sr.Microphone()
     except (OSError, IOError) as e:
         print(f"Error initializing microphone: {e}")
+        
+        if is_macos:
+            print("\n*** MACOS PERMISSION ERROR ***")
+            print("This error often occurs when macOS has denied microphone access.")
+            print("1. Open System Preferences > Security & Privacy > Privacy > Microphone")
+            print("2. Make sure Terminal or your IDE has permission to access the microphone")
+            print("3. Restart the application after granting permissions")
+            print("*****************************\n")
         return None
 
     # Make audio capture interruptible with a short timeout
@@ -693,6 +750,18 @@ def listen_to_user(timeout=None, recalibrate=False):
                     raise
                 except Exception as e:
                     print(f"Error during calibration chunk {i+1}: {e}")
+                    
+                    # On macOS, this is often a permission issue
+                    if is_macos and i == 0:  # Only show on first error
+                        print("\n*** MACOS MICROPHONE CALIBRATION ERROR ***")
+                        print("This error might be caused by microphone permission issues.")
+                        print("1. Open System Preferences > Security & Privacy > Privacy > Microphone")
+                        print("2. Make sure Terminal or your IDE has permission to access the microphone")
+                        print("3. Check your microphone is not being used by another application")
+                        print("4. Try unplugging and reconnecting any external microphones")
+                        print("5. Try restarting the application after fixing permissions")
+                        print("*****************************\n")
+                    
                     # Continue with other chunks
 
             # Apply configurable energy threshold settings
@@ -735,3 +804,118 @@ def listen_to_user(timeout=None, recalibrate=False):
     except Exception as e:
         print(f"Unexpected error in speech recognition: {e}")
         return None
+
+
+def test_microphone():
+    """
+    Test microphone access and provide detailed diagnostic information.
+    
+    This function tests microphone access and prints detailed diagnostic 
+    information to help troubleshoot permission issues, especially on macOS.
+    
+    Returns:
+        bool: True if microphone test was successful, False otherwise
+    """
+    print("\n" + "="*60)
+    print(" "*15 + "MICROPHONE ACCESS TEST")
+    print("="*60)
+    
+    # System information
+    print(f"OS: {platform.system()} {platform.release()}")
+    print(f"Python version: {platform.python_version()}")
+    
+    # Check if running in a virtual environment
+    in_virtualenv = hasattr(sys, 'real_prefix') or (hasattr(sys, 'base_prefix') and sys.base_prefix != sys.prefix)
+    print(f"Running in virtual environment: {in_virtualenv}")
+    
+    # Check if we're running in Nix environment
+    in_nix = "IN_NIX_SHELL" in os.environ or "NIX_PROFILE" in os.environ
+    print(f"Running in Nix environment: {in_nix}")
+    
+    success = True
+    try:
+        # List available microphones
+        print("\nAvailable microphones:")
+        mic_list = sr.Microphone.list_microphone_names()
+        if mic_list:
+            for i, mic_name in enumerate(mic_list):
+                print(f"  {i}: {mic_name}")
+        else:
+            print("  No microphones detected!")
+            print("\n  >>> ISSUE DETECTED: No microphones available <<<")
+            success = False
+            
+        # Try to initialize the microphone
+        print("\nTrying to initialize microphone...")
+        try:
+            mic = sr.Microphone()
+            print("  Microphone initialized successfully")
+        except (OSError, IOError) as e:
+            print(f"  ERROR: Could not initialize microphone: {e}")
+            print("\n  >>> ISSUE DETECTED: Microphone initialization failed <<<")
+            success = False
+            
+        # Try to adjust for ambient noise
+        if success:
+            print("\nTrying to adjust for ambient noise...")
+            try:
+                recognizer = sr.Recognizer()
+                with mic as source:
+                    recognizer.adjust_for_ambient_noise(source, duration=1.0)
+                print(f"  Success! Energy threshold: {recognizer.energy_threshold:.1f}")
+            except Exception as e:
+                print(f"  ERROR: Could not calibrate microphone: {e}")
+                print("\n  >>> ISSUE DETECTED: Microphone calibration failed <<<")
+                success = False
+                
+        # Try to record a short clip
+        if success:
+            print("\nTrying to record 3 seconds of audio...")
+            try:
+                recognizer = sr.Recognizer()
+                with mic as source:
+                    print("  Recording for 3 seconds...")
+                    audio = recognizer.record(source, duration=3)
+                print("  Successfully recorded audio!")
+                
+                # Try to recognize the audio (might be empty)
+                try:
+                    print("\nTrying to recognize recorded audio...")
+                    text = recognizer.recognize_google(audio)
+                    print(f"  Recognized: '{text}'")
+                except sr.UnknownValueError:
+                    print("  No speech detected in the recording (this is normal for silent environments)")
+                except Exception as e:
+                    print(f"  Recognition error: {e}")
+            except Exception as e:
+                print(f"  ERROR: Could not record audio: {e}")
+                print("\n  >>> ISSUE DETECTED: Audio recording failed <<<")
+                success = False
+    except Exception as e:
+        print(f"\nERROR during microphone test: {e}")
+        success = False
+    
+    # Provide a conclusion
+    print("\nTest conclusion:")
+    if success:
+        print("✅ All microphone tests PASSED!")
+        print("   Speech recognition should work correctly.")
+    else:
+        print("❌ Some microphone tests FAILED!")
+        
+        if platform.system() == "Darwin":  # macOS
+            print("\nOn macOS, microphone issues are usually permission-related:")
+            print("1. Go to System Preferences > Security & Privacy > Privacy > Microphone")
+            print("2. Ensure that Terminal or your IDE has microphone access")
+            print("3. You may need to quit Terminal/IDE completely and restart after changing permissions")
+            print("4. If using Nix, try running the application from a different Terminal window")
+            print("5. Check if your microphone is being used by another application")
+        else:
+            print("\nTroubleshooting tips:")
+            print("1. Check if your microphone is properly connected")
+            print("2. Check if your microphone is being used by another application")
+            print("3. Try a different microphone if available")
+            print("4. Check system sound settings to ensure the correct microphone is selected")
+    
+    print("="*60)
+    return success
