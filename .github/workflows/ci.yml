@@ -12,15 +12,32 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: DeterminateSystems/nix-installer-action@v17
-      - uses: DeterminateSystems/magic-nix-cache-action@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          
+      # Use GitHub's own cache action instead of the DeterminateSystems one
+      - uses: actions/cache@v4
+        name: Cache Nix store
+        with:
+          path: |
+            /nix/store
+            ~/.cache/nix
+          key: nix-${{ runner.os }}-${{ hashFiles('flake.nix', 'flake.lock') }}
+          restore-keys: |
+            nix-${{ runner.os }}-
+            
       - name: Configure Nix
         run: |
           mkdir -p ~/.config/nix
           echo 'extra-experimental-features = nix-command flakes' >> ~/.config/nix/nix.conf
           echo 'allow-import-from-derivation = false' >> ~/.config/nix/nix.conf
           echo 'eval-cache = false' >> ~/.config/nix/nix.conf
+          echo 'warn-dirty = false' >> ~/.config/nix/nix.conf
+          # Disable binary cache to avoid HTTP 418 errors
+          echo 'substitute = false' >> ~/.config/nix/nix.conf
+          
       - name: Run linting
-        run: nix develop --option warn-dirty false -c make lint
+        run: nix --quiet develop -c make lint
         env:
           NIX_CONFIG: "extra-experimental-features = nix-command flakes"
 
@@ -29,15 +46,32 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: DeterminateSystems/nix-installer-action@v17
-      - uses: DeterminateSystems/magic-nix-cache-action@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          
+      # Use GitHub's own cache action instead of the DeterminateSystems one
+      - uses: actions/cache@v4
+        name: Cache Nix store
+        with:
+          path: |
+            /nix/store
+            ~/.cache/nix
+          key: nix-${{ runner.os }}-${{ hashFiles('flake.nix', 'flake.lock') }}
+          restore-keys: |
+            nix-${{ runner.os }}-
+            
       - name: Configure Nix
         run: |
           mkdir -p ~/.config/nix
           echo 'extra-experimental-features = nix-command flakes' >> ~/.config/nix/nix.conf
           echo 'allow-import-from-derivation = false' >> ~/.config/nix/nix.conf
           echo 'eval-cache = false' >> ~/.config/nix/nix.conf
+          echo 'warn-dirty = false' >> ~/.config/nix/nix.conf
+          # Disable binary cache to avoid HTTP 418 errors
+          echo 'substitute = false' >> ~/.config/nix/nix.conf
+          
       - name: Run type checking
-        run: nix develop --option warn-dirty false -c make type
+        run: nix --quiet develop -c make type
         env:
           NIX_CONFIG: "extra-experimental-features = nix-command flakes"
 
@@ -46,14 +80,31 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: DeterminateSystems/nix-installer-action@v17
-      - uses: DeterminateSystems/magic-nix-cache-action@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          
+      # Use GitHub's own cache action instead of the DeterminateSystems one  
+      - uses: actions/cache@v4
+        name: Cache Nix store
+        with:
+          path: |
+            /nix/store
+            ~/.cache/nix
+          key: nix-${{ runner.os }}-${{ hashFiles('flake.nix', 'flake.lock') }}
+          restore-keys: |
+            nix-${{ runner.os }}-
+            
       - name: Configure Nix
         run: |
           mkdir -p ~/.config/nix
           echo 'extra-experimental-features = nix-command flakes' >> ~/.config/nix/nix.conf
           echo 'allow-import-from-derivation = false' >> ~/.config/nix/nix.conf
           echo 'eval-cache = false' >> ~/.config/nix/nix.conf
+          echo 'warn-dirty = false' >> ~/.config/nix/nix.conf
+          # Disable binary cache to avoid HTTP 418 errors
+          echo 'substitute = false' >> ~/.config/nix/nix.conf
+          
       - name: Run tests
-        run: nix develop --option warn-dirty false -c make test
+        run: nix --quiet develop -c make test
         env:
           NIX_CONFIG: "extra-experimental-features = nix-command flakes"
