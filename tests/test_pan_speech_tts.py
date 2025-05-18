@@ -9,6 +9,9 @@ import pyttsx3
 
 from pan_speech import SpeakManager
 
+# Helper to identify macOS for skipping tests
+IS_MACOS = platform.system() == "Darwin"
+
 
 class TestSpeakManager(unittest.TestCase):
     """Test the SpeakManager class and its optimization features."""
@@ -30,6 +33,7 @@ class TestSpeakManager(unittest.TestCase):
             self.assertEqual(manager.speech_count, 0)
             self.assertFalse(manager.speaking_event.is_set())
 
+    @unittest.skipIf(not IS_MACOS, "Test only relevant on macOS")
     def test_init_engine_macos(self):
         """Test platform-specific engine initialization for macOS."""
         # Use direct method patching instead of system mocking to avoid scope issues

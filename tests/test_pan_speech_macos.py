@@ -6,31 +6,35 @@ from unittest import mock
 
 import pyttsx3
 
+# Helper to identify macOS for skipping tests
+IS_MACOS = platform.system() == "Darwin"
+
 
 class TestMacOSTTS(unittest.TestCase):
     """Test macOS-specific TTS optimizations."""
 
-    @mock.patch('platform.system')
-    def test_platform_specific_settings(self, mock_system):
+    def test_platform_specific_settings(self):
         """Test that voice rate differs by platform."""
         # Clear any imported modules to force reload
         import sys
         if 'pan_config' in sys.modules:
             del sys.modules['pan_config']
+        
+        with mock.patch('platform.system') as mock_system:
+            # Test macOS defaults
+            mock_system.return_value = 'Darwin'
+            import pan_config
+            self.assertEqual(pan_config.DEFAULT_VOICE_RATE, 190)
             
-        # Test macOS defaults
-        mock_system.return_value = 'Darwin'
-        import pan_config
-        self.assertEqual(pan_config.DEFAULT_VOICE_RATE, 190)
+            # Clear imported module again
+            del sys.modules['pan_config']
+            
+            # Test other platform defaults
+            mock_system.return_value = 'Linux'
+            import pan_config
+            self.assertEqual(pan_config.DEFAULT_VOICE_RATE, 160)
         
-        # Clear imported module again
-        del sys.modules['pan_config']
-        
-        # Test other platform defaults
-        mock_system.return_value = 'Linux'
-        import pan_config
-        self.assertEqual(pan_config.DEFAULT_VOICE_RATE, 160)
-        
+    @unittest.skipIf(not IS_MACOS, "Test only relevant on macOS")
     @mock.patch('platform.system')
     def test_macos_chunk_size(self, mock_system):
         """Test that macOS uses larger chunk sizes."""
@@ -100,6 +104,7 @@ class TestMacOSTTS(unittest.TestCase):
                 # (300 vs 150 chars)
                 self.assertGreater(len(chunks_macos[0]), len(chunks_windows[0]))
     
+    @unittest.skipIf(not IS_MACOS, "Test only relevant on macOS")
     @mock.patch('platform.system')
     def test_macos_sleep_time(self, mock_system):
         """Test that sleep time is reduced for macOS."""

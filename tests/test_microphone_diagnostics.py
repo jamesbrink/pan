@@ -12,6 +12,9 @@ import pan_speech
 # Import main only within test cases to avoid circular imports
 # from main import check_macos_microphone_permissions
 
+# Helper to identify macOS for skipping tests
+IS_MACOS = platform.system() == "Darwin"
+
 # This is a dummy function just for testing
 def _dummy_test_microphone():
     """Dummy test to avoid warnings in test suite."""
@@ -133,6 +136,7 @@ class TestMicrophoneTest(unittest.TestCase):
 class TestMacOSPermissionsCheck(unittest.TestCase):
     """Test macOS permissions check function."""
 
+    @unittest.skipIf(not IS_MACOS, "Test only relevant on macOS")
     @mock.patch('platform.system')
     def test_non_macos_skips_check(self, mock_system):
         """Test that permissions check is skipped on non-macOS platforms."""
@@ -155,6 +159,7 @@ class TestMacOSPermissionsCheck(unittest.TestCase):
             # Should not attempt to check microphones
             mock_microphone.list_microphone_names.assert_not_called()
 
+    @unittest.skipIf(not IS_MACOS, "Test only relevant on macOS")
     @mock.patch('platform.system')
     def test_macos_with_microphones(self, mock_system):
         """Test permissions check on macOS with microphones available."""
@@ -179,6 +184,7 @@ class TestMacOSPermissionsCheck(unittest.TestCase):
             # Should check microphones
             mock_microphone.list_microphone_names.assert_called_once()
 
+    @unittest.skipIf(not IS_MACOS, "Test only relevant on macOS")
     @mock.patch('platform.system')
     def test_macos_no_microphones(self, mock_system):
         """Test permissions check on macOS with no microphones available."""
@@ -215,6 +221,7 @@ class TestMacOSPermissionsCheck(unittest.TestCase):
             # Should check microphones
             mock_microphone.list_microphone_names.assert_called_once()
 
+    @unittest.skipIf(not IS_MACOS, "Test only relevant on macOS")
     @mock.patch('platform.system')
     def test_macos_permission_error(self, mock_system):
         """Test permissions check on macOS when microphone listing raises error."""
@@ -244,6 +251,7 @@ class TestMacOSPermissionsCheck(unittest.TestCase):
 class TestListenForKeyword(unittest.TestCase):
     """Test keyword detection function with additional diagnostic improvements."""
 
+    @unittest.skipIf(not IS_MACOS, "Test only relevant on macOS")
     @mock.patch('pan_speech.sr.Microphone')
     @mock.patch('pan_speech.sr.Recognizer')
     @mock.patch('platform.system')
@@ -278,6 +286,7 @@ class TestListenForKeyword(unittest.TestCase):
         self.assertTrue(hasattr(pan_speech.sr.Microphone, '_checked_macos_permissions'))
         self.assertTrue(pan_speech.sr.Microphone._checked_macos_permissions)
 
+    @unittest.skipIf(not IS_MACOS, "Test only relevant on macOS")
     @mock.patch('pan_speech.sr.Microphone')
     @mock.patch('platform.system')
     def test_macos_no_microphones(self, mock_system, mock_microphone):
