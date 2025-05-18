@@ -3,6 +3,7 @@ Speech Interface Module for PAN (Cross-Platform)
 
 This module provides text-to-speech and speech recognition capabilities for PAN.
 On Windows, it uses SAPI5 directly for maximum stability. On Linux, it uses espeak.
+For speech recognition, it uses Google Speech API by default and falls back to VOSK (offline).
 """
 
 import speech_recognition as sr
@@ -14,10 +15,16 @@ import platform
 from pan_emotions import pan_emotions
 from pan_config import DEFAULT_VOICE_RATE, DEFAULT_VOICE_VOLUME
 import win32com.client  # For SAPI5 on Windows
+from vosk import Model, KaldiRecognizer
+import json
+import os
 
 # Detect OS
 is_windows = platform.system().lower() == "windows"
 is_linux = platform.system().lower() == "linux"
+
+# Path to the VOSK model (adjust to your directory)
+VOSK_MODEL_PATH = "vosk_model"
 
 # Voice parameters for different emotional states
 emotion_voices = {
@@ -121,9 +128,23 @@ def listen_to_user(timeout=5, phrase_time_limit=10):
         try:
             audio = recognizer.listen(source, timeout=timeout, phrase_time_limit=phrase_time_limit)
             print("Processing audio...")
-            text = recognizer.recognize_google(audio)
-            print(f"You said: {text}")
-            return text
+            try:
+                text = recognizer.recognize_google(audio)
+                print(f"You said (Google): {text}")
+                return text
+            except:
+                print("[INFO] Google failed, using VOSK (offline)...")
+                if not os.path.exists(VOSK_MODEL_PATH):
+                    print("VOSK model not found. Please download the VOSK model.")
+                    return None
+
+                model = Model(VOSK_MODEL_PATH)
+                recognizer_vosk = KaldiRecognizer(model, 16000)
+                recognizer_vosk.AcceptWaveform(audio.get_raw_data())
+                result = json.loads(recognizer_vosk.Result())
+                text = result.get("text", "")
+                print(f"You said (VOSK): {text}")
+                return text
         except sr.WaitTimeoutError:
             print("Listening timed out while waiting for phrase to start.")
         except sr.UnknownValueError:
