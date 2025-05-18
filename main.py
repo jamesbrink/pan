@@ -84,63 +84,68 @@ def curiosity_loop():
 
 def listen_with_retries(max_attempts=3, timeout=None):
     """
-    Attempt to listen for user speech input with multiple retries on failure.
-
-    This function ensures that PAN waits for any text-to-speech to finish before
-    attempting to listen, and retries listening if no clear speech is detected.
-    It also handles keyboard interrupts gracefully to allow clean exit.
+    Attempt to listen for user speech input with continuous mode support.
+    
+    In continuous mode, after max_attempts, it returns to wake word detection
+    without repeatedly showing failure messages.
 
     Args:
-        max_attempts (int): Maximum number of listening attempts before giving up
+        max_attempts (int): Maximum number of listening attempts before returning None
         timeout (int, optional): Maximum time in seconds to wait for speech input on each attempt
                                 If None, uses the configured default.
 
     Returns:
-        str or None: Transcribed speech text if successful, None if all attempts fail
+        str or None: Transcribed speech text if successful, None after max_attempts
 
     Raises:
         KeyboardInterrupt: Re-raises keyboard interrupt to allow clean exit
     """
     global exit_requested
+    
+    # Wait for any TTS to finish before listening
+    wait_start = time.time()
+    wait_timeout = 10  # seconds - reduced to ensure faster response to CTRL+C
+    last_log_time = 0
 
+    try:
+        while pan_speech.speak_manager.speaking_event.is_set():
+            # Check if exit has been requested by signal handler
+            if exit_requested:
+                return None
+
+            elapsed = time.time() - wait_start
+            if elapsed > wait_timeout:
+                print(f"Warning: Timeout waiting for TTS to finish ({elapsed:.1f}s), forcing listen.")
+                break
+                
+            if int(elapsed) % 5 == 0 and int(elapsed) != last_log_time:
+                print(f"Still waiting for TTS to finish after {int(elapsed)} seconds...")
+                last_log_time = int(elapsed)
+                
+            time.sleep(0.1)
+    except KeyboardInterrupt:
+        print("\nKeyboard interrupt detected while waiting for TTS...")
+        cleanup_and_exit()
+        return None
+
+    # Track attempts within this listening session
     for attempt in range(max_attempts):
         # Check if exit has been requested by signal handler
         if exit_requested:
             return None
 
-        wait_start = time.time()
-        wait_timeout = 10  # seconds - reduced to ensure faster response to CTRL+C
-        last_log_time = 0
-
-        # Wait for TTS to finish speaking before listening, with periodic interrupt checks
         try:
-            while pan_speech.speak_manager.speaking_event.is_set():
-                # Check if exit has been requested by signal handler
-                if exit_requested:
-                    return None
-
-                elapsed = time.time() - wait_start
-                if elapsed > wait_timeout:
-                    print(
-                        f"Warning: Timeout waiting for TTS to finish ({elapsed:.1f}s), forcing listen."
-                    )
-                    break
-                if int(elapsed) % 5 == 0 and int(elapsed) != last_log_time:
-                    print(
-                        f"Still waiting for TTS to finish after {int(elapsed)} seconds..."
-                    )
-                    last_log_time = int(elapsed)
-                time.sleep(0.1)
-        except KeyboardInterrupt:
-            print("\nKeyboard interrupt detected while waiting for TTS...")
-            cleanup_and_exit()
-            return None
-
-        try:
-            # Use recalibration on first attempt for better accuracy
-            use_recalibration = attempt == 0
+            # Only recalibrate and display verbose messages on first attempt
+            use_recalibration = attempt == 0  # First attempt is zero-indexed
+            
+            # Use shorter timeout for retries to make the process feel more responsive
+            current_timeout = timeout if attempt == 0 else min(timeout or 3, 3)
+            
+            # Only display "Listening..." on the first attempt to reduce noise
             text = pan_speech.listen_to_user(
-                timeout=timeout, recalibrate=use_recalibration
+                timeout=current_timeout, 
+                recalibrate=use_recalibration,
+                quiet_mode=(attempt > 0)  # Reduce output on retry attempts
             )
 
             # Check if exit has been requested by signal handler
@@ -150,15 +155,19 @@ def listen_with_retries(max_attempts=3, timeout=None):
             if text:
                 return text
 
-            print(f"Listen attempt {attempt + 1} failed, retrying...")
-            time.sleep(1)
-
+            # Don't display "retrying" message on the last attempt
+            if attempt < max_attempts - 1:
+                print(f"Didn't catch that, listening again...")
+                time.sleep(0.3)  # Shorter delay between attempts
+                
         except KeyboardInterrupt:
             print("\nKeyboard interrupt detected during speech recognition")
             cleanup_and_exit()
             return None
-
-    print("Max listen attempts reached without success.")
+            
+    # If we get here, we've reached max attempts without success
+    # Don't print verbose "Max listen attempts" message - just return None
+    # This allows the main loop to handle it more gracefully
     return None
 
 
@@ -355,11 +364,10 @@ if __name__ == "__main__":
                     # Reset the last interaction time
                     last_interaction_time = time.time()
                 else:
-                    print("No valid input detected, listening again...")
-                    
                     # In continuous listening mode, go back to listening for wake word
+                    # without excessive messages
                     if USE_KEYWORD_ACTIVATION and CONTINUOUS_LISTENING:
-                        print(f"Returning to wake word detection mode. Say '{pan_config.ASSISTANT_NAME}' to activate.")
+                        print(f"\nWaiting for wake word. Say '{pan_config.ASSISTANT_NAME}' to activate.")
             except KeyboardInterrupt:
                 # This should be caught by the signal handler, but just in case
                 cleanup_and_exit()

@@ -75,8 +75,36 @@ if quantization_level.lower() == "none":
 model.eval()
 print(f"Conversation model loaded successfully: {pan_config.CONVERSATION_MODEL_NAME}")
 
-# Context Memory (Session-based)
-conversation_history = []
+# Prepare the system prompt
+def create_system_prompt():
+    """
+    Create a system prompt formatted for the current model.
+    """
+    assistant_name = pan_config.ASSISTANT_NAME
+    model_name = pan_config.CONVERSATION_MODEL_NAME.lower()
+    
+    # System prompt that defines assistant's personality and capabilities
+    # Keep it concise and focused on essential instructions
+    system_message = (
+        f"You are {assistant_name}, a friendly personal assistant. "
+        f"You help with information, weather, news, and conversations. "
+        f"You have a personality and give concise, accurate responses. "
+        f"When you don't know something, you offer to search for it."
+    )
+
+    # Format the system message based on the model type
+    if "qwen" in model_name:
+        # For Qwen models, use their chat format
+        formatted_system = f"<|im_start|>system\n{system_message}<|im_end|>"
+    else:
+        # Default format for other models
+        formatted_system = f"System: {system_message}"
+        
+    return formatted_system
+
+# Context Memory (Session-based) with system prompt initialized at startup
+conversation_history = [create_system_prompt()]
+print(f"System prompt initialized for {pan_config.ASSISTANT_NAME}")
 
 
 # Respond to user input
@@ -143,6 +171,8 @@ def local_llm_conversation(prompt):
     # Explicitly mark that we are modifying the global variable
     global conversation_history
 
+    # System prompt is now initialized at startup, so we don't need to check here
+
     # Format user input based on model
     model_name = pan_config.CONVERSATION_MODEL_NAME.lower()
     
@@ -163,6 +193,11 @@ def local_llm_conversation(prompt):
     # Generate response with context memory
     context_text = "\n".join(conversation_history)
     print(f"DEBUG: Using {pan_config.CONVERSATION_MODEL_NAME} with context memory...")
+    
+    # Debug the conversation history size (for debugging purposes)
+    # This helps monitor if we're keeping context within reasonable size
+    context_tokens = len(tokenizer.encode(context_text))
+    print(f"Context size: {len(conversation_history)} messages, {context_tokens} tokens")
     
     # Determine the model-specific prompt format
     # Different models have different prompt formats
@@ -208,11 +243,68 @@ def local_llm_conversation(prompt):
                 # For Qwen models, the response comes after the assistant tag
                 if "<|im_start|>assistant" in full_response:
                     response = full_response.split("<|im_start|>assistant")[-1].strip()
+                    if response.startswith("\n"):
+                        response = response[1:]  # Remove leading newline
                 else:
                     response = full_response.split(context_text)[-1].strip()
             else:
                 # For other models, split on the assistant name
                 response = full_response.split(f"{assistant_name}:")[-1].strip()
+            
+            # Initial clean-up of common artifacts
+            response = response.lstrip("<|im_end|>").strip()
+                
+            # Clean up response - remove any model artifacts
+            # Common patterns to clean up
+            patterns_to_clean = [
+                "system", 
+                "user", 
+                "assistant", 
+                "<|im_start|>",
+                "<|im_end|>",
+                f"You are {assistant_name}",
+                "friendly personal assistant"
+            ]
+            
+            # Check if the response contains any of our system prompt text
+            contains_system_text = any(pattern in response for pattern in patterns_to_clean)
+            
+            if contains_system_text:
+                # System prompt likely leaked into response, do a thorough cleaning
+                lines = response.split("\n")
+                cleaned_lines = []
+                skip_line = False
+                
+                for line in lines:
+                    # Check if this line should be skipped
+                    if any(pattern in line for pattern in patterns_to_clean):
+                        skip_line = True
+                        continue
+                        
+                    # If we're still in skip mode, check if this line might be content now
+                    if skip_line:
+                        # If we find a line that doesn't look like part of a prompt, start including lines again
+                        if line and not any(p in line for p in ["you", "help", "memory", "information", "context"]):
+                            skip_line = False
+                        else:
+                            continue
+                    
+                    # Add the line if we're not skipping
+                    if not skip_line:
+                        cleaned_lines.append(line)
+                
+                # If we have cleaned lines, use those instead
+                if cleaned_lines:
+                    cleaned_response = "\n".join(cleaned_lines).strip()
+                    if cleaned_response:  # Only use if not empty
+                        response = cleaned_response
+            
+            # Final cleanup for common artifacts that might remain
+            if response.startswith("assistant"):
+                response = response[9:].strip()  # "assistant" is 9 chars
+                
+            # Debug: Show the first 50 chars of the response to help troubleshoot
+            print(f"Generated response: {response[:50]}{'...' if len(response) > 50 else ''}")
             
     except Exception as e:
         response = f"Error with language model: {str(e)}"
@@ -236,6 +328,14 @@ def local_llm_conversation(prompt):
 def summarize_memory():
     global conversation_history
     print("DEBUG: Summarizing conversation history...")
+    
+    # Get the current system message if it exists (usually the first message)
+    system_message = None
+    if conversation_history and (
+        ("system" in conversation_history[0].lower()) or 
+        ("System:" in conversation_history[0])
+    ):
+        system_message = conversation_history[0]
     
     # Get the base conversation text
     conversation_text = "\n".join(conversation_history)
@@ -289,7 +389,12 @@ def summarize_memory():
                 else:
                     summary = full_response.split(conversation_text)[-1].strip()
             
-            conversation_history = [f"CONVERSATION SUMMARY: {summary.strip()}"]
+            # Create new conversation history with system message (if it existed) and summary
+            if system_message:
+                conversation_history = [system_message, f"CONVERSATION SUMMARY: {summary.strip()}"]
+            else:
+                conversation_history = [f"CONVERSATION SUMMARY: {summary.strip()}"]
+                
             print(f"DEBUG: Memory summarized: {summary.strip()}")
     except Exception as e:
         print(f"Error summarizing memory: {str(e)}")
@@ -299,8 +404,11 @@ def summarize_memory():
 def clear_memory():
     # Explicitly mark that we are modifying the global variable
     global conversation_history
-    # Clear the conversation history list
+    # Clear the conversation history, but keep the system prompt
+    system_prompt = create_system_prompt()
     conversation_history.clear()
+    conversation_history.append(system_prompt)
+    print("Conversation memory cleared, system prompt retained")
 
 
 # Show Memory

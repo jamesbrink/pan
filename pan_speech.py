@@ -664,7 +664,7 @@ def listen_for_keyword(timeout=3):
         return False
 
 
-def listen_to_user(timeout=None, recalibrate=False):
+def listen_to_user(timeout=None, recalibrate=False, quiet_mode=False):
     """
     Listen for user speech input and convert it to text.
 
@@ -675,6 +675,7 @@ def listen_to_user(timeout=None, recalibrate=False):
         timeout (int, optional): Maximum seconds to wait for speech to begin.
                                If None, uses SPEECH_RECOGNITION_TIMEOUT from config.
         recalibrate (bool): Force recalibration of ambient noise levels
+        quiet_mode (bool): Reduce console output for retry attempts
 
     Returns:
         str or None: Transcribed speech text if successful, None if unsuccessful
@@ -690,23 +691,27 @@ def listen_to_user(timeout=None, recalibrate=False):
 
     # Initialize the microphone in a try block to handle potential errors
     try:
-        # List available microphones to help with diagnostics
-        if is_macos:
-            print("Checking available microphones:")
-            mic_list = sr.Microphone.list_microphone_names()
-            if mic_list:
-                for i, mic_name in enumerate(mic_list):
-                    print(f"  {i}: {mic_name}")
-                print(f"Using default microphone: {mic_list[0]}")
-            else:
-                print("No microphones detected! Check system permissions.")
-                print("\n*** MACOS PERMISSION ERROR ***")
-                print("If you're on macOS, you may need to grant microphone permissions.")
-                print("1. Open System Preferences > Security & Privacy > Privacy > Microphone")
-                print("2. Make sure Terminal or your IDE has permission to access the microphone")
-                print("3. Restart the application after granting permissions")
-                print("*****************************\n")
-                return None
+        # Only check microphones once per session by using a class flag
+        if not hasattr(listen_to_user, '_microphone_checked'):
+            listen_to_user._microphone_checked = True
+            
+            # List available microphones to help with diagnostics
+            if is_macos:
+                print("Checking available microphones:")
+                mic_list = sr.Microphone.list_microphone_names()
+                if mic_list:
+                    for i, mic_name in enumerate(mic_list):
+                        print(f"  {i}: {mic_name}")
+                    print(f"Using default microphone: {mic_list[0]}")
+                else:
+                    print("No microphones detected! Check system permissions.")
+                    print("\n*** MACOS PERMISSION ERROR ***")
+                    print("If you're on macOS, you may need to grant microphone permissions.")
+                    print("1. Open System Preferences > Security & Privacy > Privacy > Microphone")
+                    print("2. Make sure Terminal or your IDE has permission to access the microphone")
+                    print("3. Restart the application after granting permissions")
+                    print("*****************************\n")
+                    return None
         
         # Attempt to initialize the microphone
         mic = sr.Microphone()
@@ -726,14 +731,17 @@ def listen_to_user(timeout=None, recalibrate=False):
     # This ensures CTRL+C can interrupt even during long operations
     try:
         with mic as source:
-            print("Listening...")
+            if not quiet_mode:
+                print("Listening...")
 
             # Use configurable noise sampling duration for better filtering
             calibrate_duration = AMBIENT_NOISE_DURATION
             if recalibrate:
                 # Use a longer duration for explicit recalibration
                 calibrate_duration = max(AMBIENT_NOISE_DURATION, 5.0)
-                print(f"Recalibrating microphone for {calibrate_duration} seconds...")
+                # Only show this message on explicit recalibration to avoid excessive output
+                if not quiet_mode:
+                    print(f"Recalibrating microphone for {calibrate_duration} seconds...")
 
             # Use shorter durations for ambient noise calibration to ensure interruptibility
             calibration_chunk_size = 0.5  # seconds
@@ -749,10 +757,11 @@ def listen_to_user(timeout=None, recalibrate=False):
                     print("\nKeyboard interrupt detected during calibration")
                     raise
                 except Exception as e:
-                    print(f"Error during calibration chunk {i+1}: {e}")
+                    if not quiet_mode:
+                        print(f"Error during calibration chunk {i+1}: {e}")
                     
                     # On macOS, this is often a permission issue
-                    if is_macos and i == 0:  # Only show on first error
+                    if is_macos and i == 0 and not quiet_mode:  # Only show on first error and not in quiet mode
                         print("\n*** MACOS MICROPHONE CALIBRATION ERROR ***")
                         print("This error might be caused by microphone permission issues.")
                         print("1. Open System Preferences > Security & Privacy > Privacy > Microphone")
@@ -774,14 +783,16 @@ def listen_to_user(timeout=None, recalibrate=False):
                     source, timeout=timeout, phrase_time_limit=PHRASE_TIME_LIMIT
                 )
             except sr.WaitTimeoutError:
-                print("Listening timed out while waiting for phrase to start")
+                if not quiet_mode:
+                    print("Listening timed out while waiting for phrase to start")
                 return None
             except KeyboardInterrupt:
                 # Re-raise for proper exit handling
                 print("\nKeyboard interrupt detected during listening")
                 raise
             except Exception as e:
-                print(f"Error during listening: {e}")
+                if not quiet_mode:
+                    print(f"Error during listening: {e}")
                 return None
 
         try:
@@ -789,7 +800,8 @@ def listen_to_user(timeout=None, recalibrate=False):
             print(f"You said: {text}")
             return text
         except sr.UnknownValueError:
-            print("Sorry, I didn't catch that.")
+            if not quiet_mode:
+                print("Sorry, I didn't catch that.")
             return None
         except sr.RequestError as e:
             print(f"Could not request results; {e}")
