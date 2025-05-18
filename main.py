@@ -251,7 +251,14 @@ if __name__ == "__main__":
                                 assistant_name = pan_config.ASSISTANT_NAME
                                 print(f"Wake word '{assistant_name}' detected! Listening for command...")
                                 # Give a brief acknowledgment to let the user know it's listening
-                                pan_speech.speak("Yes?", mood_override="curious")
+                                # Wait a moment to make sure any previous TTS operations are completed
+                                time.sleep(0.5)
+                                try:
+                                    pan_speech.speak("Yes?", mood_override="curious")
+                                    # Give time for the speech to start before continuing
+                                    time.sleep(0.5)
+                                except Exception as e:
+                                    print(f"Error acknowledging wake word: {e}")
                                 break
                             # Brief pause to prevent CPU overuse
                             time.sleep(0.1)

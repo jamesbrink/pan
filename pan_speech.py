@@ -254,7 +254,26 @@ class SpeakManager:
                 # We already set the voice parameters in the worker, no need to call set_voice_by_mood each time
                 # This avoids the overhead of changing properties for each chunk
                 self.engine.say(chunk)
-                self.engine.runAndWait()
+                
+                # Handle the "run loop already started" error that can occur when
+                # multiple speech requests come in quickly
+                try:
+                    self.engine.runAndWait()
+                except RuntimeError as loop_error:
+                    if "run loop already started" in str(loop_error):
+                        print("[SpeakManager] Detected run loop error, using alternative approach")
+                        # Give a small delay to let the previous runAndWait finish
+                        time.sleep(0.5)
+                        # Try a simple engine restart if needed
+                        try:
+                            self._init_engine()
+                            self.set_voice_by_mood(mood)
+                            self.engine.say(chunk)
+                            self.engine.runAndWait()
+                        except Exception as restart_error:
+                            print(f"Engine restart failed: {restart_error}")
+                    else:
+                        print(f"macOS TTS runAndWait error: {loop_error}")
             except (AttributeError, RuntimeError) as tts_error:
                 print(f"macOS TTS error in chunk: {tts_error}")
                 traceback.print_exc()
@@ -264,7 +283,25 @@ class SpeakManager:
                 # We set this in the worker, but some engines might need it per chunk
                 self.set_voice_by_mood(mood)
                 self.engine.say(chunk)
-                self.engine.runAndWait()
+                
+                # Handle the "run loop already started" error
+                try:
+                    self.engine.runAndWait()
+                except RuntimeError as loop_error:
+                    if "run loop already started" in str(loop_error):
+                        print("[SpeakManager] Detected run loop error, using alternative approach")
+                        # Give a small delay to let the previous runAndWait finish
+                        time.sleep(0.5)
+                        # Try a simple engine restart if needed
+                        try:
+                            self._init_engine()
+                            self.set_voice_by_mood(mood)
+                            self.engine.say(chunk)
+                            self.engine.runAndWait()
+                        except Exception as restart_error:
+                            print(f"Engine restart failed: {restart_error}")
+                    else:
+                        print(f"TTS runAndWait error: {loop_error}")
             except (AttributeError, RuntimeError) as tts_error:
                 print(f"TTS error in chunk: {tts_error}")
                 traceback.print_exc()
@@ -437,7 +474,7 @@ def recalibrate_microphone():
         return False
 
 
-def listen_for_keyword(timeout=5):
+def listen_for_keyword(timeout=3):
     """
     Listen for the wake keyword (assistant name) in ambient audio.
     
@@ -469,17 +506,21 @@ def listen_for_keyword(timeout=5):
         with mic as source:
             # Shorter ambient noise adjustment to be more responsive
             try:
-                recognizer.adjust_for_ambient_noise(source, duration=1.0)
+                # Use a shorter ambient noise duration for wake word detection
+                # to make it more responsive
+                recognizer.adjust_for_ambient_noise(source, duration=0.5)
             except Exception as e:
                 print(f"Error during keyword calibration: {e}")
             
-            # Use specific settings for keyword detection
+            # Use more sensitive settings for keyword detection
+            # Lower energy threshold makes it more sensitive to quiet speech
             recognizer.dynamic_energy_threshold = True
-            recognizer.energy_threshold = ENERGY_THRESHOLD
+            recognizer.energy_threshold = max(ENERGY_THRESHOLD - 50, 200)  # More sensitive
             
             try:
                 print("Listening for wake word...")
-                audio = recognizer.listen(source, timeout=timeout, phrase_time_limit=3)
+                # Use a shorter phrase time limit for quicker detection
+                audio = recognizer.listen(source, timeout=timeout, phrase_time_limit=2)
             except sr.WaitTimeoutError:
                 return False
             except KeyboardInterrupt:
@@ -495,9 +536,20 @@ def listen_for_keyword(timeout=5):
             print(f"Heard: {text}")
             
             # Check if the assistant name is in the recognized text
+            # We look for exact matches or close matches (like "hey pan" or "ok pan")
+            words = text.split()
             if assistant_name_lower in text:
                 print(f"Wake word '{ASSISTANT_NAME}' detected!")
                 return True
+            
+            # Also detect if the assistant name is at the beginning or end of any word
+            # This helps catch cases where words run together
+            for word in words:
+                if (word.startswith(assistant_name_lower) or 
+                    word.endswith(assistant_name_lower) or 
+                    assistant_name_lower in word):
+                    print(f"Wake word '{ASSISTANT_NAME}' detected in word: {word}!")
+                    return True
             
             return False
         except sr.UnknownValueError:
