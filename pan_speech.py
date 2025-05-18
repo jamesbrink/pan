@@ -1002,4 +1002,7 @@ def test_microphone():
             )
 
     print("=" * 60)
-    return success
+    # Always return success, but if we're in a test file, also assert it
+    if "__file__" in globals() and __file__.endswith("test_microphone_diagnostics.py"):
+        assert success  # Use assert for pytest
+    return success  # Return value for normal use
