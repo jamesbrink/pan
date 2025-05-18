@@ -34,17 +34,21 @@ jobs:
           echo 'eval-cache = false' >> ~/.config/nix/nix.conf
           echo 'warn-dirty = false' >> ~/.config/nix/nix.conf
           echo 'accept-flake-config = true' >> ~/.config/nix/nix.conf
-          # This allows using packages that are unsupported on the current system
-          echo 'allow-unsupported-system = true' >> ~/.config/nix/nix.conf
-          # Disable binary cache to avoid HTTP 418 errors
-          echo 'substitute = false' >> ~/.config/nix/nix.conf
+          
+          # Enable more binary caches to help with build issues
+          echo 'substituters = https://cache.nixos.org https://nix-community.cachix.org' >> ~/.config/nix/nix.conf
+          echo 'trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= nix-community.cachix.org-1:mB9FSh9qf2dCimDSUo8Zy7bkq5CX+/rkCWyvRCYg3Fs=' >> ~/.config/nix/nix.conf
+          
+          # Set binary cache settings for reliability
+          echo 'connect-timeout = 30' >> ~/.config/nix/nix.conf  
+          echo 'stalled-download-timeout = 60' >> ~/.config/nix/nix.conf
+          echo 'fallback = true' >> ~/.config/nix/nix.conf
           
       - name: Run linting
-        # Handle the stderr redirection to filter out stdenv.tests warnings
-        # while still allowing actual errors to fail the build
+        # Handle stderr redirection to filter out warnings
         run: |
           export NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1
-          nix --log-format raw --option warn-dirty false develop --impure 2> >(grep -v "stdenv.tests" >&2) -c make lint || exit $?
+          nix --option accept-flake-config true develop --impure -c make lint || exit $?
         shell: bash
 
   typecheck:
@@ -74,17 +78,21 @@ jobs:
           echo 'eval-cache = false' >> ~/.config/nix/nix.conf
           echo 'warn-dirty = false' >> ~/.config/nix/nix.conf
           echo 'accept-flake-config = true' >> ~/.config/nix/nix.conf
-          # This allows using packages that are unsupported on the current system
-          echo 'allow-unsupported-system = true' >> ~/.config/nix/nix.conf
-          # Disable binary cache to avoid HTTP 418 errors
-          echo 'substitute = false' >> ~/.config/nix/nix.conf
+          
+          # Enable more binary caches to help with build issues
+          echo 'substituters = https://cache.nixos.org https://nix-community.cachix.org' >> ~/.config/nix/nix.conf
+          echo 'trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= nix-community.cachix.org-1:mB9FSh9qf2dCimDSUo8Zy7bkq5CX+/rkCWyvRCYg3Fs=' >> ~/.config/nix/nix.conf
+          
+          # Set binary cache settings for reliability
+          echo 'connect-timeout = 30' >> ~/.config/nix/nix.conf  
+          echo 'stalled-download-timeout = 60' >> ~/.config/nix/nix.conf
+          echo 'fallback = true' >> ~/.config/nix/nix.conf
           
       - name: Run type checking
-        # Handle the stderr redirection to filter out stdenv.tests warnings
-        # while still allowing actual errors to fail the build
+        # Handle stderr redirection to filter out warnings
         run: |
           export NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1
-          nix --log-format raw --option warn-dirty false develop --impure 2> >(grep -v "stdenv.tests" >&2) -c make type || exit $?
+          nix --option accept-flake-config true develop --impure -c make type || exit $?
         shell: bash
 
   test:
@@ -114,15 +122,19 @@ jobs:
           echo 'eval-cache = false' >> ~/.config/nix/nix.conf
           echo 'warn-dirty = false' >> ~/.config/nix/nix.conf
           echo 'accept-flake-config = true' >> ~/.config/nix/nix.conf
-          # This allows using packages that are unsupported on the current system
-          echo 'allow-unsupported-system = true' >> ~/.config/nix/nix.conf
-          # Disable binary cache to avoid HTTP 418 errors
-          echo 'substitute = false' >> ~/.config/nix/nix.conf
+          
+          # Enable more binary caches to help with build issues
+          echo 'substituters = https://cache.nixos.org https://nix-community.cachix.org' >> ~/.config/nix/nix.conf
+          echo 'trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= nix-community.cachix.org-1:mB9FSh9qf2dCimDSUo8Zy7bkq5CX+/rkCWyvRCYg3Fs=' >> ~/.config/nix/nix.conf
+          
+          # Set binary cache settings for reliability
+          echo 'connect-timeout = 30' >> ~/.config/nix/nix.conf  
+          echo 'stalled-download-timeout = 60' >> ~/.config/nix/nix.conf
+          echo 'fallback = true' >> ~/.config/nix/nix.conf
           
       - name: Run tests
-        # Handle the stderr redirection to filter out stdenv.tests warnings
-        # while still allowing actual errors to fail the build
+        # Handle stderr redirection to filter out warnings
         run: |
           export NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1
-          nix --log-format raw --option warn-dirty false develop --impure 2> >(grep -v "stdenv.tests" >&2) -c make test || exit $?
+          nix --option accept-flake-config true develop --impure -c make test || exit $?
         shell: bash
