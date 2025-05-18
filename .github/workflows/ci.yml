@@ -121,6 +121,8 @@ jobs:
   windows-build:
     name: Build and Test (Windows)
     runs-on: windows-latest
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     
     steps:
       - name: Checkout repository
