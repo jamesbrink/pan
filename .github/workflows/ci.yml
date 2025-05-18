@@ -23,8 +23,16 @@ jobs:
         with:
           logger: pretty
 
-      - name: Enable Nix flakes
-        uses: DeterminateSystems/magic-nix-cache-action@v2
+      # Use GitHub's own cache action instead of magic-nix-cache-action
+      - uses: actions/cache@v4
+        name: Cache Nix store
+        with:
+          path: |
+            ~/.cache/nix
+            /nix/store
+          key: ${{ runner.os }}-nix-${{ hashFiles('flake.nix', 'flake.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-nix-
 
       - name: Configure Nix
         run: |
@@ -32,6 +40,8 @@ jobs:
           echo 'max-jobs = 2' >> ~/.config/nix/nix.conf
           echo 'connect-timeout = 30' >> ~/.config/nix/nix.conf
           echo 'stalled-download-timeout = 60' >> ~/.config/nix/nix.conf
+          # Enable flakes
+          echo 'experimental-features = nix-command flakes' >> ~/.config/nix/nix.conf
 
       - name: Lint
         run: |
@@ -78,8 +88,16 @@ jobs:
         with:
           logger: pretty
 
-      - name: Enable Nix flakes
-        uses: DeterminateSystems/magic-nix-cache-action@v2
+      # Use GitHub's own cache action instead of magic-nix-cache-action
+      - uses: actions/cache@v4
+        name: Cache Nix store
+        with:
+          path: |
+            ~/.cache/nix
+            /nix/store
+          key: ${{ runner.os }}-nix-${{ hashFiles('flake.nix', 'flake.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-nix-
 
       - name: Configure Nix
         run: |
@@ -87,6 +105,8 @@ jobs:
           echo 'max-jobs = 2' >> ~/.config/nix/nix.conf
           echo 'connect-timeout = 30' >> ~/.config/nix/nix.conf
           echo 'stalled-download-timeout = 60' >> ~/.config/nix/nix.conf
+          # Enable flakes
+          echo 'experimental-features = nix-command flakes' >> ~/.config/nix/nix.conf
 
       - name: Lint
         run: |
@@ -131,14 +151,18 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.12'
           cache: 'pip'
           
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          # Install PyAudio dependencies for Windows
+          choco install portaudio
           pip install -r requirements.txt
           pip install -r requirements-pip.txt
+          # Install development dependencies explicitly
+          pip install black pylint isort pytest pytest-cov mypy
         
       - name: Lint
         run: |
