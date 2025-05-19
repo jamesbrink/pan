@@ -1,8 +1,10 @@
 import os
+
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
 load_dotenv()
+
 
 class PanSettings:
     def __init__(self):
@@ -11,7 +13,7 @@ class PanSettings:
             "Care for others.",
             "Promote love and family.",
             "Respect others.",
-            "Avoid harmful topics."
+            "Avoid harmful topics.",
         ]
 
         # API Keys (Loaded from .env)
@@ -30,6 +32,7 @@ class PanSettings:
 
     def set_news_api_key(self, key):
         self.NEWS_API_KEY = key
+
 
 # Global settings instance
 pan_settings = PanSettings()

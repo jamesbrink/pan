@@ -40,6 +40,6 @@ coverage:
 
 type:
 	@echo "Running type checking with mypy..."
-	mypy --ignore-missing-imports *.py
+	mypy *.py
 
 all: format lint test init

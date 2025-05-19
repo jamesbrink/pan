@@ -4,6 +4,10 @@ Utility functions for PAN (Personal Assistant with Nuance)
 This module provides shared utility functions and common code used across different modules.
 """
 
+# pylint: disable=duplicate-code
+# The duplication with init_db.py and pan_core.py is intentional
+# as we need the same database schema in multiple components
+
 import sqlite3
 
 import torch
